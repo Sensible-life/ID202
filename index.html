@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Letters</title>
+    <style>
+      /* CSS는 설명에 포함되어 있지 않지만, 가독성을 위해 간단하게 추가할 수 있습니다. */
+      body {
+        font-family: monospace;
+        padding: 20px;
+        line-height: 1.5;
+      }
+      #output {
+        border: 1px solid #ccc;
+        min-height: 100px;
+        padding: 10px;
+        margin-top: 20px;
+        display: flex; /* 요소들이 한 줄에 나열되도록 flex 사용 */
+        flex-wrap: wrap; /* 내용이 넘치면 다음 줄로 이동 */
+      }
+      #output span {
+        margin-right: 5px;
+        font-weight: bold;
+      }
+      #output img, #output video {
+        margin: 5px;
+        max-width: 100px; /* 이미지와 비디오 크기 제한 */
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Letters: E Roon Kang</h1>
+    <p>We write from left to right but why?</p>
+
+    <div id="output"></div>
+
+    <script>
+      // find the #output element
+      const outputEl = document.getElementById("output");
+
+      // Step 5: Sound utility function
+      function playSound(url) {
+        const audio = new Audio(url);
+        audio.play();
+      }
+
+      // Step 4: Utility function to create and append a new DOM element
+      function addDomElement(tag, attrs) {
+        const el = document.createElement(tag);
+        if (attrs) {
+          for (const k in attrs) {
+            if (k === "text") {
+              el.textContent = attrs[k];
+            } else {
+              // autoplay나 muted처럼 값이 없는 속성(attribute)도 처리
+              el.setAttribute(k, attrs[k] === "" ? "" : attrs[k]);
+            }
+          }
+        }
+        outputEl.appendChild(el);
+        return el;
+      }
+
+      // Listen for keydown events
+      document.addEventListener("keydown", function(event) {
+        // 기본 동작(예: Backspace 누를 때 브라우저 뒤로 가기)을 막아줍니다.
+        if (event.key === "Backspace" || event.key === " ") {
+            event.preventDefault();
+        }
+        
+        console.log("Key pressed:", event.key);
+
+        // Step 4 & 5: Implementing rules with if/else if statements
+        if (event.key === "Backspace") {
+          // Backspace는 마지막 DOM 요소(element)를 삭제
+          if (outputEl.lastChild) {
+            outputEl.removeChild(outputEl.lastChild);
+          }
+        } else if (event.key === "d" || event.key === "D") {
+          // 'd' 또는 'D' 입력 시 "BARK!" 출력
+          addDomElement("span", { text: "BARK!" });
+        } else if (event.key === "c" || event.key === "C") {
+          // 'c' 또는 'C' 입력 시 고양이 이미지 출력
+          addDomElement("img", { 
+            src: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUyeTcyNHM4b3Mya3pmczY5MDBldW4zcDE2dGFsYjFvdjBka2RuNGRvdiZlcD12MV9naWZzX3NlYXJjaCZjdT1n/3vcHdyb75qRIA/200w.gif",
+            alt: "Cat GIF"
+          });
+        } else if (event.key === "v" || event.key === "V") {
+          // 'v' 또는 'V' 입력 시 비디오 출력
+          addDomElement("video", {
+            src: "https://i.imgur.com/Pj87n9Q.mp4",
+            width: "300",
+            height: "300",
+            autoplay: "true",
+            muted: "", // 속성이지만 값이 없는 경우 빈 문자열로 설정
+            controls: ""
+          });
+        } else if (event.key === "s" || event.key === "S") {
+          // 's' 또는 'S' 입력 시 소리 재생 및 텍스트 출력
+          playSound("https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg");
+          addDomElement("span", { text: "(sound played)" });
+        } else if (event.key.length === 1 && event.key !== "Shift" && event.key !== "Control" && event.key !== "Alt") {
+          // 길이가 1인 일반 문자(Shift, Control, Alt 등 특수 키 제외)는 그대로 출력
+          addDomElement("span", { text: event.key });
+        }
+      });
+    </script>
+  </body>
+</html>
