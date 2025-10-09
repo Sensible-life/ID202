@@ -2,108 +2,239 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>Letters</title>
+    <title>Sand Letters</title>
     <style>
-      /* CSS는 설명에 포함되어 있지 않지만, 가독성을 위해 간단하게 추가할 수 있습니다. */
       body {
-        font-family: monospace;
+        margin: 0;
         padding: 20px;
-        line-height: 1.5;
+        background: #1a1a1a;
+        font-family: monospace;
+        overflow: hidden;
       }
-      #output {
-        border: 1px solid #ccc;
-        min-height: 100px;
-        padding: 10px;
+      h1, p {
+        color: #fff;
+      }
+      #canvas {
+        display: block;
         margin-top: 20px;
-        display: flex; /* 요소들이 한 줄에 나열되도록 flex 사용 */
-        flex-wrap: wrap; /* 내용이 넘치면 다음 줄로 이동 */
-      }
-      #output span {
-        margin-right: 5px;
-        font-weight: bold;
-      }
-      #output img, #output video {
-        margin: 5px;
-        max-width: 100px; /* 이미지와 비디오 크기 제한 */
-        height: auto;
+        background: #000;
+        cursor: text;
       }
     </style>
   </head>
   <body>
-    <h1>Letters: E Roon Kang</h1>
-    <p>We write from left to right but why?</p>
+    <h1>Sand Letters: 모래 글자 효과</h1>
+    <p>마우스를 움직여서 시작 위치를 정한 후 키보드로 글자를 입력해보세요. 글자는 왼쪽에서 오른쪽으로 써지고, 3초 후에 모래처럼 흩어집니다!</p>
 
-    <div id="output"></div>
+    <canvas id="canvas"></canvas>
 
     <script>
-      // find the #output element
-      const outputEl = document.getElementById("output");
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 캔버스 크기 설정
+      canvas.width = window.innerWidth - 40;
+      canvas.height = window.innerHeight - 150;
 
-      // Step 5: Sound utility function
-      function playSound(url) {
-        const audio = new Audio(url);
-        audio.play();
+      // 입자(모래알) 클래스
+      class Particle {
+        constructor(x, y, letterIndex) {
+          this.x = x;
+          this.y = y;
+          this.originalX = x;
+          this.originalY = y;
+          this.letterIndex = letterIndex;
+          this.size = Math.random() * 2 + 1;
+          this.color = `hsl(${Math.random() * 60 + 30}, 80%, ${Math.random() * 30 + 50}%)`; // 황금빛 모래색
+          this.velocityX = 0;
+          this.velocityY = 0;
+          this.dispersing = false;
+          this.alpha = 1;
+        }
+
+        update() {
+          if (this.dispersing) {
+            // 흩어질 때
+            this.velocityY += 0.5; // 중력
+            this.x += this.velocityX;
+            this.y += this.velocityY;
+            this.alpha -= 0.01; // 서서히 사라짐
+          }
+        }
+
+        draw() {
+          if (this.alpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        disperse() {
+          this.dispersing = true;
+          // 랜덤한 방향으로 흩어짐
+          this.velocityX = (Math.random() - 0.5) * 10;
+          this.velocityY = (Math.random() - 0.5) * 10 - 3; // 위로 튀어오름
+        }
       }
 
-      // Step 4: Utility function to create and append a new DOM element
-      function addDomElement(tag, attrs) {
-        const el = document.createElement(tag);
-        if (attrs) {
-          for (const k in attrs) {
-            if (k === "text") {
-              el.textContent = attrs[k];
-            } else {
-              // autoplay나 muted처럼 값이 없는 속성(attribute)도 처리
-              el.setAttribute(k, attrs[k] === "" ? "" : attrs[k]);
+      // 글자 클래스
+      class Letter {
+        constructor(char, x, y) {
+          this.char = char;
+          this.x = x;
+          this.y = y;
+          this.particles = [];
+          this.createdAt = Date.now();
+          this.dispersed = false;
+          
+          this.createParticles();
+        }
+
+        createParticles() {
+          // 임시 캔버스에 글자 그리기
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          const fontSize = 80;
+          tempCanvas.width = fontSize * 2;
+          tempCanvas.height = fontSize * 2;
+
+          tempCtx.font = `bold ${fontSize}px Arial`;
+          tempCtx.fillStyle = 'white';
+          tempCtx.textAlign = 'center';
+          tempCtx.textBaseline = 'middle';
+          tempCtx.fillText(this.char, fontSize, fontSize);
+
+          // 픽셀 데이터 가져오기
+          const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+          const pixels = imageData.data;
+
+          // 모래 입자 생성 (픽셀 샘플링)
+          for (let y = 0; y < tempCanvas.height; y += 3) {
+            for (let x = 0; x < tempCanvas.width; x += 3) {
+              const index = (y * tempCanvas.width + x) * 4;
+              const alpha = pixels[index + 3];
+              
+              if (alpha > 128) { // 불투명한 픽셀에만 입자 생성
+                const px = this.x + x - fontSize;
+                const py = this.y + y - fontSize;
+                this.particles.push(new Particle(px, py, letters.length));
+              }
             }
           }
         }
-        outputEl.appendChild(el);
-        return el;
+
+        update() {
+          // 3초 후 흩어짐
+          if (!this.dispersed && Date.now() - this.createdAt > 3000) {
+            this.dispersed = true;
+            this.particles.forEach(p => p.disperse());
+          }
+
+          this.particles.forEach(p => p.update());
+        }
+
+        draw() {
+          this.particles.forEach(p => p.draw());
+        }
+
+        isFinished() {
+          // 모든 입자가 사라졌는지 확인
+          return this.dispersed && this.particles.every(p => p.alpha <= 0);
+        }
       }
 
-      // Listen for keydown events
-      document.addEventListener("keydown", function(event) {
-        // 기본 동작(예: Backspace 누를 때 브라우저 뒤로 가기)을 막아줍니다.
-        if (event.key === "Backspace" || event.key === " ") {
-            event.preventDefault();
-        }
-        
-        console.log("Key pressed:", event.key);
+      // 글자들을 저장하는 배열
+      let letters = [];
+      let currentX = 50;
+      let currentY = 150;
+      let mouseX = 50;
+      let mouseY = 150;
+      let isTyping = false; // 타이핑 중인지 확인
 
-        // Step 4 & 5: Implementing rules with if/else if statements
-        if (event.key === "Backspace") {
-          // Backspace는 마지막 DOM 요소(element)를 삭제
-          if (outputEl.lastChild) {
-            outputEl.removeChild(outputEl.lastChild);
-          }
-        } else if (event.key === "d" || event.key === "D") {
-          // 'd' 또는 'D' 입력 시 "BARK!" 출력
-          addDomElement("span", { text: "BARK!" });
-        } else if (event.key === "c" || event.key === "C") {
-          // 'c' 또는 'C' 입력 시 고양이 이미지 출력
-          addDomElement("img", { 
-            src: "https://media2.giphy.com/media/v1.Y2lkPTZjMDliOTUyeTcyNHM4b3Mya3pmczY5MDBldW4zcDE2dGFsYjFvdjBka2RuNGRvdiZlcD12MV9naWZzX3NlYXJjaCZjdT1n/3vcHdyb75qRIA/200w.gif",
-            alt: "Cat GIF"
-          });
-        } else if (event.key === "v" || event.key === "V") {
-          // 'v' 또는 'V' 입력 시 비디오 출력
-          addDomElement("video", {
-            src: "https://i.imgur.com/Pj87n9Q.mp4",
-            width: "300",
-            height: "300",
-            autoplay: "true",
-            muted: "", // 속성이지만 값이 없는 경우 빈 문자열로 설정
-            controls: ""
-          });
-        } else if (event.key === "s" || event.key === "S") {
-          // 's' 또는 'S' 입력 시 소리 재생 및 텍스트 출력
-          playSound("https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg");
-          addDomElement("span", { text: "(sound played)" });
-        } else if (event.key.length === 1 && event.key !== "Shift" && event.key !== "Control" && event.key !== "Alt") {
-          // 길이가 1인 일반 문자(Shift, Control, Alt 등 특수 키 제외)는 그대로 출력
-          addDomElement("span", { text: event.key });
+      // 마우스 위치 추적
+      canvas.addEventListener('mousemove', function(event) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = event.clientX - rect.left;
+        mouseY = event.clientY - rect.top;
+        
+        // 타이핑 중이 아니면 커서를 마우스 위치로 리셋
+        if (!isTyping) {
+          currentX = mouseX;
+          currentY = mouseY;
         }
+      });
+
+      // 키보드 입력 처리
+      document.addEventListener('keydown', function(event) {
+        console.log('Key pressed:', event.key);
+
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          // 마지막 글자 제거
+          if (letters.length > 0) {
+            letters.pop();
+            currentX -= 70;
+          }
+          // 모든 글자가 지워지면 타이핑 상태 해제
+          if (letters.length === 0) {
+            isTyping = false;
+          }
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
+          // 줄바꿈 - 마우스 위치 기준으로 새로운 줄 시작
+          isTyping = false;
+          currentX = mouseX;
+          currentY = mouseY;
+        } else if (event.key === ' ') {
+          event.preventDefault();
+          // 스페이스
+          currentX += 40;
+          isTyping = true;
+        } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          
+          // 화면 넘어가면 현재 마우스 위치에서 새로 시작
+          if (currentX > canvas.width - 100) {
+            currentX = mouseX;
+            currentY = mouseY;
+          }
+
+          // 새 글자 생성
+          const letter = new Letter(event.key, currentX, currentY);
+          letters.push(letter);
+          currentX += 70;
+          isTyping = true; // 타이핑 상태로 전환
+        }
+      });
+
+      // 애니메이션 루프
+      function animate() {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // 트레일 효과
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 글자 업데이트 및 그리기
+        letters.forEach(letter => {
+          letter.update();
+          letter.draw();
+        });
+
+        // 사라진 글자 제거
+        letters = letters.filter(letter => !letter.isFinished());
+
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+
+      // 캔버스 크기 조정
+      window.addEventListener('resize', () => {
+        canvas.width = window.innerWidth - 40;
+        canvas.height = window.innerHeight - 150;
       });
     </script>
   </body>
