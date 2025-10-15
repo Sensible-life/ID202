@@ -1,19 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="input-mode" content="latin">
+    <meta http-equiv="Content-Language" content="en">
     <title>Sand Letters</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="loading.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="keywords.js"></script>
+    <script src="loading.js"></script>
     <style>
       body {
         margin: 0;
         padding: 0;
         overflow: hidden;
         font-family: monospace;
+        /* 영어 입력 모드 유도 */
+        ime-mode: disabled;
+        -ms-ime-mode: disabled;
       }
       #three-container {
         position: fixed;
@@ -34,10 +42,28 @@
       }
     </style>
   </head>
-  <body>
+  <body lang="en">
     <div id="three-container"></div>
     <canvas id="canvas"></canvas>
 
+    <script>
+      // 페이지 로드 시 IME(한글 입력) 비활성화 유도
+      document.addEventListener('DOMContentLoaded', function() {
+        document.body.setAttribute('lang', 'en');
+        // 페이지 포커스 시 영어 입력 모드 유도
+        window.focus();
+      });
+      
+      // 키 입력 시작 시 영어 입력 유도
+      let isFirstInput = true;
+      document.addEventListener('keydown', function(e) {
+        if (isFirstInput && e.key.length === 1) {
+          isFirstInput = false;
+          console.log('✍️ English input mode recommended');
+        }
+      }, { once: false });
+    </script>
+    
     <script>
       // Three.js 3D 씬 설정
       const scene = new THREE.Scene();
@@ -166,6 +192,7 @@
       let lampShaking = false;
       let lampShakeStartTime = 0;
       let currentTypedText = '';
+      let introMessage = null; // 중간 문장 ("Wish for a new world..." 3부분)
       let wishMessage = null;
       let wishInputText = ''; // Make your wish 이후 입력되는 키워드
       let explosionParticles = []; // 주둥이에서 폭발하는 파티클
@@ -278,6 +305,51 @@
       // 캔버스 크기 설정
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+
+      // 배경 이미지 샘플링용 숨겨진 캔버스
+      const bgCanvas = document.createElement('canvas');
+      const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      let bgImageData = null;
+      let currentBackgroundImage = null;
+      
+      // 배경색에서 대비되는 색상 계산 함수
+      function getContrastColor(r, g, b) {
+        // 명도 계산 (0~255)
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        
+        // 밝은 배경이면 어두운 색, 어두운 배경이면 밝은 색
+        if (brightness > 128) {
+          // 밝은 배경 -> 어두운 금색/갈색
+          return `rgba(139, 90, 43, ${0.8 + Math.random() * 0.2})`;
+        } else {
+          // 어두운 배경 -> 밝은 금색
+          return `rgba(255, 215, 100, ${0.8 + Math.random() * 0.2})`;
+        }
+      }
+      
+      // 파티클 위치의 배경색 가져오기
+      function getBackgroundColorAt(x, y) {
+        if (!bgImageData) {
+          // 배경 이미지 없으면 기본 금색
+          return `hsl(45, 85%, ${Math.random() * 15 + 55}%)`;
+        }
+        
+        const px = Math.floor(x);
+        const py = Math.floor(y);
+        
+        if (px < 0 || px >= bgCanvas.width || py < 0 || py >= bgCanvas.height) {
+          return `hsl(45, 85%, ${Math.random() * 15 + 55}%)`;
+        }
+        
+        const index = (py * bgCanvas.width + px) * 4;
+        const r = bgImageData.data[index];
+        const g = bgImageData.data[index + 1];
+        const b = bgImageData.data[index + 2];
+        
+        return getContrastColor(r, g, b);
+      }
 
       // 모래 커튼 파티클 클래스 (입체적 화면 전환)
       class SandCurtainParticle {
@@ -520,7 +592,9 @@
           if (this.alpha > 0) {
             ctx.save();
             ctx.globalAlpha = this.alpha;
-            ctx.fillStyle = this.color;
+            // 배경색에 따라 파티클 색상 동적 변경
+            const dynamicColor = getBackgroundColorAt(this.x, this.y);
+            ctx.fillStyle = dynamicColor;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
@@ -545,11 +619,12 @@
 
       // 글자 클래스
       class Letter {
-        constructor(char, x, y, index) {
+        constructor(char, x, y, index, customFontSize = 80) {
           this.char = char;
           this.x = x;
           this.y = y;
           this.index = index; // 글자 생성 순서
+          this.fontSize = customFontSize; // 커스텀 폰트 크기
           this.particles = [];
           this.createdAt = Date.now();
           this.dispersed = false;
@@ -562,7 +637,7 @@
           // 임시 캔버스에 글자 그리기
           const tempCanvas = document.createElement('canvas');
           const tempCtx = tempCanvas.getContext('2d');
-          const fontSize = 80;
+          const fontSize = this.fontSize;
           tempCanvas.width = fontSize * 2;
           tempCanvas.height = fontSize * 2;
 
@@ -584,8 +659,8 @@
 
           // 모래 입자 생성 (픽셀 샘플링 - 더 촘촘하게)
           const mainParticles = [];
-          for (let y = 0; y < tempCanvas.height; y += 2) {
-            for (let x = 0; x < tempCanvas.width; x += 2) {
+          for (let y = 0; y < tempCanvas.height; y += 1) {
+            for (let x = 0; x < tempCanvas.width; x += 1) {
               const index = (y * tempCanvas.width + x) * 4;
               const alpha = pixels[index + 3];
               
@@ -602,7 +677,10 @@
           }
           
           // 글자 주변에 추가 랜덤 파티클 생성 (모래가 흩어진 느낌)
-          const extraParticleCount = Math.floor(mainParticles.length * 0.2); // 20%의 추가 파티클
+          // 글자 크기에 따라 추가 파티클 비율 조정 (작은 글씨는 적게)
+          const extraParticleRatio = Math.min(0.5, (fontSize / 80) * 0.5);
+          const extraParticleCount = Math.floor(mainParticles.length * extraParticleRatio);
+          
           for (let i = 0; i < extraParticleCount; i++) {
             // 기존 파티클 중 랜덤하게 선택
             const baseParticle = mainParticles[Math.floor(Math.random() * mainParticles.length)];
@@ -618,8 +696,8 @@
         }
 
         update() {
-          // wishMessage는 사라지지 않음
-          if (this.isWishMessage) {
+          // wishMessage와 introMessage는 별도 처리
+          if (this.isWishMessage || this.isIntroMessage) {
             this.particles.forEach(p => p.update());
             return;
           }
@@ -731,14 +809,22 @@
         } else if (event.key === 'Enter') {
           event.preventDefault();
           
-          // Make your wish 이후: 배경 변경 (ocean만)
+          // Make your wish 이후: 배경 변경 (키워드 매칭)
           if (wishMessage && wishInputText.trim() !== '') {
-            const keyword = wishInputText.trim().toLowerCase();
-            console.log('🌍 Wish keyword:', keyword);
+            const text = wishInputText.trim().toLowerCase();
+            console.log('🌍 Analyzing wish:', text);
             
-            if (keyword === 'ocean') {
-              // 바다 배경 이미지 (직접 URL 사용)
-              const imageUrl = 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=1920&h=1080&fit=crop';
+            // 텍스트에서 키워드 찾기 (keywords.js에서 불러온 데이터 사용)
+            let detectedKeyword = null;
+            for (const [category, keywords] of Object.entries(keywordMap)) {
+              if (keywords.some(keyword => text.includes(keyword))) {
+                detectedKeyword = category;
+                break;
+              }
+            }
+            
+            if (detectedKeyword && backgroundImages[detectedKeyword]) {
+              const imageUrl = backgroundImages[detectedKeyword];
               
               // body 배경 설정
               document.body.style.backgroundImage = `url('${imageUrl}')`;
@@ -759,20 +845,39 @@
               // 안개 제거
               scene.fog = null;
               
-              console.log('✨ Background changed to ocean!');
+              // 배경 이미지를 숨겨진 canvas에 그려서 픽셀 데이터 읽기
+              currentBackgroundImage = imageUrl;
+              const bgImage = new Image();
+              bgImage.crossOrigin = 'anonymous';
+              bgImage.onload = function() {
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+                bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
+                bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+                console.log('📸 Background image data loaded for particle color adjustment');
+              };
+              bgImage.onerror = function() {
+                console.warn('⚠️ Failed to load background image for color sampling');
+              };
+              bgImage.src = imageUrl;
+              
+              console.log(`✨ Background changed to: ${detectedKeyword}!`);
             } else {
-              console.log('⚠️ Only "ocean" keyword is supported');
+              console.log('⚠️ No matching keyword found. Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
             }
             
             wishInputText = ''; // 리셋
             return;
           }
           
-          // "touch" 포함 여부 확인
+          // 램프 관련 키워드 포함 여부 확인
           console.log('Enter pressed. Current text:', currentTypedText);
-          if (currentTypedText.toLowerCase().includes('touch')) {
+          const lampKeywords = ['touch', 'rub', 'polish', 'scratch', 'stroke', 'caress', 'pat', 'tap'];
+          const textLower = currentTypedText.toLowerCase();
+          const hasLampKeyword = lampKeywords.some(keyword => textLower.includes(keyword));
+          
+          if (hasLampKeyword) {
             touchCount++;
-            console.log('✨ TOUCH DETECTED! Count:', touchCount);
+            console.log('✨ LAMP INTERACTION DETECTED! Count:', touchCount);
             
             // 램프 흔들림 시작
             lampShaking = true;
@@ -839,9 +944,11 @@
           // 현재 타이핑 텍스트에 추가
           currentTypedText += event.key;
           
-          // "touch" 단어가 완성되었는지 실시간 체크
-          if (currentTypedText.toLowerCase().includes('touch')) {
-            console.log('"touch" detected in text:', currentTypedText);
+          // 램프 관련 키워드가 완성되었는지 실시간 체크
+          const lampKeywordsCheck = ['touch', 'rub', 'polish', 'scratch', 'stroke', 'caress', 'pat', 'tap'];
+          const detectedKeyword = lampKeywordsCheck.find(kw => currentTypedText.toLowerCase().includes(kw));
+          if (detectedKeyword) {
+            console.log(`"${detectedKeyword}" detected in text:`, currentTypedText);
           }
           
           // 글자 너비 + 간격(8px), 최소 45px, 최대 58px - 넓은 글자도 적절한 간격
@@ -879,6 +986,53 @@
           isTyping = false;
         }
 
+        // 중간 메시지 렌더링 ("Wish for a new world...") - 커튼과 함께 드러남
+        if (introMessage && introMessage.length > 0) {
+          const timeSinceExplosion = (Date.now() - explosionStartTime) / 1000;
+          
+          introMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 커튼이 지나간 후 순차적으로 드러남 (오른쪽→왼쪽, 파트별 시차)
+            if (timeSinceExplosion > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              if (index % 10 === 0) { // 매 10번째 글자마다 로그
+                console.log(`✨ Revealing intro part ${msgLetter.introPart} at ${timeSinceExplosion.toFixed(1)}s`);
+              }
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                if (p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // disperseTime에 도달하면 날아감
+            if (timeSinceExplosion > msgLetter.disperseTime && !msgLetter.dispersing) {
+              msgLetter.dispersing = true;
+              msgLetter.particles.forEach(p => {
+                p.dispersing = true;
+                p.velocityX = (Math.random() - 0.5) * 3;
+                p.velocityY = (Math.random() - 0.5) * 3 - 2; // 위로 날아감
+              });
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 사라졌는지 확인
+          const allGone = introMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone && timeSinceExplosion > 9.0) {
+            introMessage = null; // 정리
+          }
+        }
+        
         // "Make your wish" 메시지 렌더링 (순차적 드러남 + 일렁임) - 중간 레이어
         if (wishMessage && wishMessage.length > 0) {
           const timeSinceExplosion = (Date.now() - explosionStartTime) / 1000;
@@ -887,8 +1041,8 @@
             // update 호출
             msgLetter.update();
             
-            // 파티클 커튼이 지나간 후 순차적으로 드러남 (오른쪽→왼쪽)
-            const revealStartTime = 2.0; // 커튼이 화면 들어올 때부터
+            // 8.2초 이후 순차적으로 드러남 (introMessage 날아가면서, 살짝 늦게)
+            const revealStartTime = 8.2;
             const timeSinceRevealStart = timeSinceExplosion - revealStartTime;
             
             if (timeSinceRevealStart > msgLetter.revealDelay) {
@@ -919,8 +1073,13 @@
         }
 
         // 모래 커튼 애니메이션 (화면 전환 효과) - 맨 위 레이어
-        if (isExploding || explosionParticles.length > 0) {
+        if (isExploding || explosionParticles.length > 0 || introMessage || wishMessage) {
           const explosionElapsed = (Date.now() - explosionStartTime) / 1000;
+          
+          // 디버깅: 타이밍 로그 (5초마다)
+          if (Math.floor(explosionElapsed) % 5 === 0 && Math.floor(explosionElapsed * 10) % 50 === 0) {
+            console.log(`⏱️ Time: ${explosionElapsed.toFixed(1)}s, introMessage: ${introMessage ? 'exists' : 'null'}, wishMessage: ${wishMessage ? 'exists' : 'null'}`);
+          }
           
           // 주둥이에서 계속 파티클 생성 (처음 1.5초 동안 - 더 길게)
           if (explosionElapsed < 1.5) {
@@ -955,30 +1114,119 @@
           // 죽은 파티클 제거
           explosionParticles = explosionParticles.filter(p => !p.isDead());
           
-          // 0.3초 후 "Make your wish" 메시지 생성 (숨겨진 상태로)
-          if (explosionElapsed > 0.3 && !wishMessage) {
-            console.log('🌟 Creating "Make your wish" message (hidden)!');
+          // 0.3초 후 중간 메시지 생성 (커튼과 함께 드러남)
+          if (explosionElapsed > 0.3 && !introMessage && !wishMessage) {
+            console.log('🌟 Creating intro message with curtain!');
             
-            const msgX = window.innerWidth / 2 - 250;
-            const msgY = window.innerHeight * 0.65; // 램프 아래쪽으로
+            introMessage = [];
+            
+            // 3개 파트로 나눔 (쉼표 기준)
+            const introParts = [
+              "Wish for a new world",
+              "a thousand new things",
+              "or just a fabulous new look"
+            ];
+            
+            // 램프 아래 중앙에 3줄로 배치 (작은 글씨)
+            const baseY = window.innerHeight * 0.62; // 램프 아래 (더 위로 올림)
+            const lineHeight = 65; // 줄 간격 (조금 더 늘림)
+            
+            introParts.forEach((text, partIndex) => {
+              const y = baseY + lineHeight * partIndex;
+              
+              // 먼저 x=0부터 시작해서 Letter 생성하고 너비 계산
+              let currentX = 0;
+              const partStartX = 0;
+              const partLetters = [];
+              
+              for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const msgLetter = new Letter(char, currentX, y, i, 55); // 작은 글씨 (55px)
+                msgLetter.isIntroMessage = true;
+                msgLetter.introPart = partIndex;
+                msgLetter.disperseTime = 8.0; // 8초에 모두 날아감
+                msgLetter.revealed = false;
+                
+                // 모든 파티클을 투명하게 시작
+                msgLetter.particles.forEach(p => {
+                  p.alpha = 0;
+                  p.targetAlpha = 1;
+                  p.forming = false;
+                });
+                
+                partLetters.push(msgLetter);
+                const spacing = char === ' ' ? 22 : Math.min(Math.max(msgLetter.width + 8, 30), 37); // 자간 조금 더 키움
+                currentX += spacing;
+              }
+              
+              // 전체 너비 계산 완료
+              const totalWidth = currentX;
+              
+              // 중앙정렬을 위해 모든 Letter의 x 위치를 오프셋 (살짝 오른쪽으로)
+              const offsetX = (window.innerWidth - totalWidth) / 2 + 30;
+              partLetters.forEach((msgLetter) => {
+                msgLetter.x += offsetX;
+                msgLetter.partStartX = offsetX;
+                // 파티클 위치도 업데이트
+                msgLetter.particles.forEach(p => {
+                  p.x += offsetX;
+                  p.originalX += offsetX;
+                });
+              });
+              
+              // introMessage에 추가
+              introMessage.push(...partLetters);
+              
+              // revealDelay 설정 (왼쪽→오른쪽)
+              partLetters.forEach((msgLetter) => {
+                const relativeX = msgLetter.x - offsetX;
+                const normalizedX = relativeX / totalWidth; // 0(왼쪽)~1(오른쪽)
+                // 파트별로 2초 간격 (2초, 4초, 6초)
+                const partRevealStartTime = 2.0 + partIndex * 2.0;
+                // 왼쪽→오른쪽으로 드러남
+                msgLetter.revealDelay = partRevealStartTime + normalizedX * 0.8;
+              });
+            });
+            
+            console.log('✨ introMessage created (will reveal with curtain sweep)!');
+          }
+          
+          // 8.0초 후 "Make your wish" 메시지 생성 (introMessage가 날아가면서)
+          if (explosionElapsed > 8.0 && introMessage && !wishMessage) {
+            console.log('🌟 Creating "Make your wish" message!');
             
             wishMessage = [];
             const message = "Make your wish";
+            const msgY = window.innerHeight * 0.65;
+            
+            // 먼저 전체 너비 계산
+            const tempCanvas2 = document.createElement('canvas');
+            const tempCtx2 = tempCanvas2.getContext('2d');
+            tempCtx2.font = `italic bold 80px 'Cormorant Garamond', serif`;
+            
+            let totalMsgWidth = 0;
+            for (let i = 0; i < message.length; i++) {
+              const char = message[i];
+              const metrics = tempCtx2.measureText(char);
+              const spacing = char === ' ' ? 25 : Math.min(Math.max(metrics.width + 8, 45), 58);
+              totalMsgWidth += spacing;
+            }
+            
+            // 중앙정렬 시작 위치 (살짝 오른쪽으로)
+            const msgX = (window.innerWidth - totalMsgWidth) / 2 + 50;
             let msgCurrentX = msgX;
             
-            // 먼저 모든 글자 생성
             for (let i = 0; i < message.length; i++) {
               const char = message[i];
               const msgLetter = new Letter(char, msgCurrentX, msgY, i);
               msgLetter.isWishMessage = true;
               msgLetter.revealDelay = 0; // 나중에 설정
-              msgLetter.revealed = false; // 아직 드러나지 않음
+              msgLetter.revealed = false;
               
-              // 모든 파티클을 투명하게 시작
               msgLetter.particles.forEach(p => {
                 p.alpha = 0;
                 p.targetAlpha = 1;
-                p.forming = false; // 형성 중이 아님
+                p.forming = false;
               });
               
               wishMessage.push(msgLetter);
@@ -986,27 +1234,23 @@
               msgCurrentX += spacing;
             }
             
-            // 오른쪽부터 드러나도록 딜레이 설정 (파티클 커튼 속도에 맞춤)
+            // 왼쪽부터 드러나도록 딜레이 설정
             const totalWidth = msgCurrentX - msgX;
-            // 파티클이 화면을 가로지르는 시간 계산 (화면너비 / 속도)
-            const curtainSweepDuration = window.innerWidth / 50 / 60; // 약 0.3~0.5초
-            
             wishMessage.forEach((msgLetter) => {
               const letterX = msgLetter.x;
-              // 오른쪽 글자일수록 먼저 드러남 (역순)
               const relativeX = letterX - msgX;
               const normalizedX = relativeX / totalWidth; // 0(왼쪽)~1(오른쪽)
-              // 파티클 커튼이 각 글자 위치에 도달하는 시간
-              msgLetter.revealDelay = (1 - normalizedX) * 0.8; // 0~0.8초 (더 빠르게)
+              // 왼쪽부터 드러남
+              msgLetter.revealDelay = normalizedX * 0.8;
             });
             
-            console.log('✨ wishMessage created (will reveal right to left)!');
+            console.log('✨ wishMessage created!');
           }
           
-          // 모든 파티클이 사라지면 종료
-          if (explosionElapsed > 4 && explosionParticles.length === 0) {
+          // wishMessage가 생성된 후에만 종료
+          if (explosionElapsed > 9.0 && explosionParticles.length === 0 && wishMessage) {
             isExploding = false;
-            console.log('🎬 Sand curtain ended - message revealed!');
+            console.log('🎬 Animation sequence completed!');
           }
         }
 
@@ -1031,6 +1275,22 @@
         // 2D 캔버스 리사이즈
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        
+        // 배경 캔버스 리사이즈
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
+        
+        // 배경 이미지가 있으면 다시 그리기
+        if (currentBackgroundImage) {
+          const bgImage = new Image();
+          bgImage.crossOrigin = 'anonymous';
+          bgImage.onload = function() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
+            bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+          };
+          bgImage.src = currentBackgroundImage;
+        }
       });
     </script>
   </body>
