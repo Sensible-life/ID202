@@ -198,6 +198,17 @@
       let explosionParticles = []; // 주둥이에서 폭발하는 파티클
       let isExploding = false;
       let explosionStartTime = 0;
+      let koreanWarningMessage = null; // 한글 경고 메시지
+      let koreanWarningStartTime = 0;
+      let completedSentences = 0; // 완성된 문장 수 (touch 없이)
+      let touchHintMessage = null; // touch 힌트 메시지
+      let touchHintStartTime = 0;
+      let touchInteractionsEnabled = true; // touch 상호작용 활성화 여부
+      let clickHintMessage = null; // 클릭 힌트 메시지
+      let clickHintStartTime = 0;
+      let touchHintShown = false; // touch 힌트가 이미 표시되었는지 추적
+      let clickHintShown = false; // 클릭 힌트가 이미 표시되었는지 추적
+      let koreanHintShown = false; // 한글 힌트가 이미 표시되었는지 추적
 
       // Three.js 애니메이션
       function animateThree() {
@@ -216,11 +227,19 @@
           
           if (elapsed < duration) {
             const t = elapsed / duration; // 0~1
-            const shake = (1 - t); // 점점 약해짐
             
-            lampGroup.rotation.x = Math.sin(Date.now() * 0.008) * shake * 0.3 * intensityMultiplier;
-            lampGroup.rotation.y = Math.sin(Date.now() * 0.011) * shake * 0.4 * intensityMultiplier;
-            lampGroup.rotation.z = Math.sin(Date.now() * 0.009) * shake * 0.25 * intensityMultiplier;
+            // ease-in-out 함수로 부드러운 시작과 끝
+            const easeInOut = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            const shake = (1 - easeInOut); // 점점 약해짐 (부드럽게)
+            
+            // 시작 부분 ease-in (처음 0.2초 동안 점진적으로 강해짐)
+            const easeInFactor = elapsed < 0.2 ? (elapsed / 0.2) * (elapsed / 0.2) : 1; // quadratic ease-in
+            
+            const finalShake = shake * easeInFactor;
+            
+            lampGroup.rotation.x = Math.sin(Date.now() * 0.008) * finalShake * 0.3 * intensityMultiplier;
+            lampGroup.rotation.y = Math.sin(Date.now() * 0.011) * finalShake * 0.4 * intensityMultiplier;
+            lampGroup.rotation.z = Math.sin(Date.now() * 0.009) * finalShake * 0.25 * intensityMultiplier;
           } else {
             // 원위치로 부드럽게 복귀
             lampGroup.rotation.x *= 0.85;
@@ -239,6 +258,15 @@
                 console.log('🌪️ Starting sand storm!');
                 isExploding = true;
                 explosionStartTime = Date.now();
+                // 화면 전환 시작으로 touch 상호작용 비활성화
+                touchInteractionsEnabled = false;
+                console.log('🚫 Touch interactions disabled due to screen transition');
+                
+                // 남아있는 touch 힌트 메시지도 함께 날리기
+                if (touchHintMessage) {
+                  console.log('🌪️ Dispersing remaining touch hint during screen transition');
+                  disperseTouchHint();
+                }
               }
             }
           }
@@ -327,6 +355,53 @@
           // 어두운 배경 -> 밝은 금색
           return `rgba(255, 215, 100, ${0.8 + Math.random() * 0.2})`;
         }
+      }
+      
+      // 배경 이미지 밝기 분석 및 램프 조명 조정 함수
+      function adjustLampLightingBasedOnBackground(imageData) {
+        const data = imageData.data;
+        let totalBrightness = 0;
+        let sampleCount = 0;
+        
+        // 이미지 중앙 영역의 밝기를 샘플링 (램프가 위치한 부분)
+        const centerX = Math.floor(imageData.width / 2);
+        const centerY = Math.floor(imageData.height / 2);
+        const sampleRadius = Math.min(imageData.width, imageData.height) / 6; // 중앙 1/3 영역
+        
+        for (let y = centerY - sampleRadius; y < centerY + sampleRadius; y += 10) {
+          for (let x = centerX - sampleRadius; x < centerX + sampleRadius; x += 10) {
+            if (x >= 0 && x < imageData.width && y >= 0 && y < imageData.height) {
+              const index = (y * imageData.width + x) * 4;
+              const r = data[index];
+              const g = data[index + 1];
+              const b = data[index + 2];
+              
+              // 명도 계산 (0~255)
+              const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+              totalBrightness += brightness;
+              sampleCount++;
+            }
+          }
+        }
+        
+        const averageBrightness = totalBrightness / sampleCount;
+        const normalizedBrightness = averageBrightness / 255; // 0~1
+        
+        console.log(`📊 Background brightness: ${averageBrightness.toFixed(1)} (normalized: ${normalizedBrightness.toFixed(2)})`);
+        
+        // 어두운 배경일수록 조명을 밝게 (0.3~1.0 범위에서 1.5~4.0으로 매핑)
+        const lightIntensity = Math.max(1.5, (1 - normalizedBrightness) * 2.5 + 1.5);
+        
+        // 앰비언트 라이트 조정
+        ambientLight.intensity = Math.max(0.8, (1 - normalizedBrightness) * 1.0 + 0.8);
+        
+        // 램프 라이트 조정
+        lampLight.intensity = Math.max(6, lightIntensity * 8);
+        
+        // 메인 라이트 조정
+        mainLight.intensity = Math.max(1.0, lightIntensity * 1.2);
+        
+        console.log(`💡 Adjusted lighting - Ambient: ${ambientLight.intensity.toFixed(2)}, Lamp: ${lampLight.intensity.toFixed(2)}, Main: ${mainLight.intensity.toFixed(2)}`);
       }
       
       // 파티클 위치의 배경색 가져오기
@@ -544,7 +619,7 @@
           this.originalY = y;
           this.letterIndex = letterIndex;
           this.size = Math.random() * 0.4 + 0.3; // 0.3~0.7 사이의 매우 작은 입자
-          this.color = `hsl(45, 85%, ${Math.random() * 15 + 55}%)`; // 황금빛 통일 (밝기만 약간 변화)
+          this.color = `hsl(0, 0%, ${Math.random() * 20 + 70}%)`; // 은색으로 변경 (70~90% 밝기)
           this.velocityX = 0;
           this.velocityY = 0;
           this.forming = true; // 형성 중
@@ -575,16 +650,16 @@
               return;
             }
             
-            // 바람에 날아가는 효과
-            this.velocityX += 0.15; // 오른쪽으로 가속
-            this.velocityY += (Math.random() - 0.5) * 0.3; // 약간의 상하 움직임
+            // 바람에 날아가는 효과 (더 느리게)
+            this.velocityX += 0.1; // 0.15 -> 0.1
+            this.velocityY += (Math.random() - 0.5) * 0.2; // 0.3 -> 0.2
             
             // 바람에 흔들림
-            this.velocityY += Math.sin(Date.now() * 0.01 + this.x) * 0.1;
+            this.velocityY += Math.sin(Date.now() * 0.01 + this.x) * 0.08; // 0.1 -> 0.08
             
             this.x += this.velocityX;
             this.y += this.velocityY;
-            this.alpha -= 0.012; // 빠르게 사라짐
+            this.alpha -= 0.008; // 0.012 -> 0.008 (더 천천히 사라짐)
           }
         }
 
@@ -592,9 +667,9 @@
           if (this.alpha > 0) {
             ctx.save();
             ctx.globalAlpha = this.alpha;
-            // 배경색에 따라 파티클 색상 동적 변경
-            const dynamicColor = getBackgroundColorAt(this.x, this.y);
-            ctx.fillStyle = dynamicColor;
+            // 파티클에 고유 색상이 있으면 사용, 없으면 배경에 따라 동적 변경
+            const fillColor = this.color || getBackgroundColorAt(this.x, this.y);
+            ctx.fillStyle = fillColor;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
@@ -606,20 +681,19 @@
           this.forming = false;
           this.dispersing = true;
           
-          // 왼쪽 파티클부터 먼저 날아가도록 딜레이 설정
-          // x 위치가 왼쪽일수록 딜레이가 짧음
-          const relativeX = this.x - baseX; // 글자 기준 상대 위치
-          this.disperseDelay = Math.max(0, relativeX * 0.25); // 왼쪽부터 순차적으로 (더 천천히)
+          // 왼쪽 파티클부터 먼저 날아가도록 딜레이 설정 (더 느리게)
+          const relativeX = this.x - baseX;
+          this.disperseDelay = Math.max(0, relativeX * 0.4); // 0.25 -> 0.4로 늘림
           
-          // 초기 속도 (오른쪽 + 약간 위로)
-          this.velocityX = Math.random() * 2 + 1; // 오른쪽으로
-          this.velocityY = (Math.random() - 0.7) * 2; // 약간 위로 튀어오름
+          // 초기 속도도 약간 느리게
+          this.velocityX = Math.random() * 1.5 + 0.8; // 2+1 -> 1.5+0.8
+          this.velocityY = (Math.random() - 0.7) * 1.5; // *2 -> *1.5
         }
       }
 
       // 글자 클래스
       class Letter {
-        constructor(char, x, y, index, customFontSize = 80) {
+        constructor(char, x, y, index, customFontSize = 80, sentenceId = 0) {
           this.char = char;
           this.x = x;
           this.y = y;
@@ -629,6 +703,8 @@
           this.createdAt = Date.now();
           this.dispersed = false;
           this.width = 0; // 글자 너비
+          this.sentenceId = sentenceId; // 문장 ID
+          this.sentenceStartTime = Date.now(); // 이 문장이 시작된 시간
           
           this.createParticles();
         }
@@ -696,23 +772,36 @@
         }
 
         update() {
-          // wishMessage와 introMessage는 별도 처리
-          if (this.isWishMessage || this.isIntroMessage) {
+          // 특별 메시지들은 별도 처리
+          if (this.isWishMessage || this.isIntroMessage || this.isKoreanWarning || this.isTouchHint || this.isClickHint) {
             this.particles.forEach(p => p.update());
             return;
           }
           
-          // 마지막 입력으로부터 0.8초 후 + 인덱스에 따른 순차 딜레이 (가속)
-          const timeSinceLastInput = Date.now() - lastInputTime;
+          // 이 문장의 마지막 입력 시간 찾기 (같은 sentenceId를 가진 글자들 중)
+          const sameSentenceLetters = letters.filter(l => l.sentenceId === this.sentenceId);
+          const sentenceLastInputTime = Math.max(...sameSentenceLetters.map(l => l.createdAt));
+          
+          // 이 문장 기준으로 시간 계산
+          const timeSinceSentenceLastInput = Date.now() - sentenceLastInputTime;
           const timeSinceCreation = Date.now() - this.createdAt;
           
-          // 간격이 점점 좁아지는 딜레이 (가속 효과, 타이밍 겹침)
-          // 지수 0.7을 사용하여 가속을 더 완만하게, 간격도 80ms로 늘림
-          const disperseDelay = 800 + (Math.pow(this.index, 0.7) * 80);
+          // 같은 문장 내에서의 인덱스 계산
+          const sentenceIndex = sameSentenceLetters.findIndex(l => l === this);
           
-          // 형성이 완료되고(1초 경과) + 마지막 입력 + 순차 딜레이 후 흩어짐
-          if (!this.dispersed && timeSinceCreation > 1000 && timeSinceLastInput > disperseDelay) {
+          // 기본 대기 시간을 1.5초로 늘리고, 순차 딜레이도 늘림
+          const disperseDelay = 1500 + (Math.pow(sentenceIndex, 0.6) * 150);
+          
+          // 형성이 완료되고(1.5초 경과) + 문장 마지막 입력 + 순차 딜레이 후 흩어짐
+          if (!this.dispersed && timeSinceCreation > 1500 && timeSinceSentenceLastInput > disperseDelay) {
             this.dispersed = true;
+            
+            // 문장의 마지막 글자일 때만 램프 키워드 체크
+            const isLastInSentence = sentenceIndex === sameSentenceLetters.length - 1;
+            if (isLastInSentence) {
+              checkLampKeywordsOnDisperse();
+            }
+            
             // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록
             this.particles.forEach(p => p.disperse(this.x));
           }
@@ -744,12 +833,30 @@
       let mouseY = window.innerHeight / 2;
       let isTyping = false; // 타이핑 중인지 확인
       let lastInputTime = Date.now(); // 마지막 입력 시간
+      let currentSentenceId = 0; // 현재 문장 ID (마우스 움직일 때마다 증가)
 
       // 마우스 위치 추적 (항상 추적)
       let lastMouseLogTime = 0;
+      let mouseHasMoved = false; // 마우스가 움직였는지 추적
+      let lastMouseX = window.innerWidth / 2;
+      let lastMouseY = window.innerHeight / 2;
+      
       window.addEventListener('mousemove', function(event) {
         mouseX = event.clientX;
         mouseY = event.clientY;
+        
+        // 마우스가 움직였는지 감지 (10픽셀 이상 움직이면)
+        const mouseMoveDistance = Math.sqrt(
+          Math.pow(mouseX - lastMouseX, 2) + Math.pow(mouseY - lastMouseY, 2)
+        );
+        
+        if (mouseMoveDistance > 10) {
+          mouseHasMoved = true;
+          console.log('🖱️ Mouse moved significantly, next typing will start at new position');
+        }
+        
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
         
         // 마우스 위치 1초마다 콘솔 출력
         const now = Date.now();
@@ -766,53 +873,52 @@
           y: camera.position.y.toFixed(2), 
           z: camera.position.z.toFixed(2)
         });
-      });
-
-      // 키보드 입력 처리 (타이핑 + 카메라 회전)
-      document.addEventListener('keydown', function(event) {
-        console.log('Key pressed:', event.key);
-
-        // 카메라 회전 (방향키) - 누르고 있으면 계속 회전
-        if (event.key === 'ArrowLeft') {
-          isRotatingLeft = true;
-          return;
-        } else if (event.key === 'ArrowRight') {
-          isRotatingRight = true;
+        
+        // 첫 클릭 힌트가 이미 표시된 경우 무시
+        if (clickHintShown) {
+          console.log('🚫 Click hint already shown, ignoring click event');
           return;
         }
         
-        // 타이핑 처리
-        if (event.key === 'Backspace') {
-          event.preventDefault();
+        // 클릭 힌트 생성 (이전 힌트가 있으면 분산시키고 새로 생성)
+        if (clickHintMessage) {
+          disperseClickHint();
+        }
+        createClickHint();
+      });
+      
+      // 터치 이벤트도 추가 (모바일 대응)
+      window.addEventListener('touchstart', function(event) {
+        // 첫 클릭 힌트가 이미 표시된 경우 무시
+        if (clickHintShown) {
+          console.log('🚫 Click hint already shown, ignoring touch event');
+          return;
+        }
+        
+        // 클릭 힌트 생성 (이전 힌트가 있으면 분산시키고 새로 생성)
+        if (clickHintMessage) {
+          disperseClickHint();
+        }
+        createClickHint();
+      });
+
+      // 한글 입력 감지 함수
+      function isKorean(text) {
+        return /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
+      }
+      
+      // 글자 사라질 때 램프 키워드 체크 함수
+      function checkLampKeywordsOnDisperse() {
+        console.log('🔍 Checking for lamp keywords on disperse:', currentTypedText);
+        
+        // 화면 전환 후에는 touch 상호작용만 비활성화 (소원 키워드는 여전히 처리)
+        if (!touchInteractionsEnabled) {
+          console.log('🚫 Touch interactions disabled, but checking wish keywords...');
           
-          // Make your wish 이후: 키워드의 마지막 글자 제거 (화면에도 적용)
-          if (wishMessage && wishInputText.length > 0) {
-            wishInputText = wishInputText.slice(0, -1);
-            console.log('Wish keyword:', wishInputText);
-            // 화면에도 반영되도록 return 제거
-          }
-          
-          // 마지막 글자 제거
-          if (letters.length > 0) {
-            const lastLetter = letters.pop();
-            const spacing = Math.min(Math.max(lastLetter.width + 8, 45), 58);
-            currentX -= spacing;
-            // 현재 텍스트에서도 마지막 글자 제거
-            currentTypedText = currentTypedText.slice(0, -1);
-          }
-          // 모든 글자가 지워지면 타이핑 상태 해제
-          if (letters.length === 0) {
-            isTyping = false;
-            currentTypedText = '';
-          }
-          lastInputTime = Date.now();
-        } else if (event.key === 'Enter') {
-          event.preventDefault();
-          
-          // Make your wish 이후: 배경 변경 (키워드 매칭)
+          // Make your wish 이후: 소원 키워드 자동 인식
           if (wishMessage && wishInputText.trim() !== '') {
             const text = wishInputText.trim().toLowerCase();
-            console.log('🌍 Analyzing wish:', text);
+            console.log('🌍 Auto-analyzing wish on disperse (disabled mode):', text);
             
             // 텍스트에서 키워드 찾기 (keywords.js에서 불러온 데이터 사용)
             let detectedKeyword = null;
@@ -854,20 +960,376 @@
                 bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
                 bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
                 console.log('📸 Background image data loaded for particle color adjustment');
+                
+                // 배경 이미지 평균 밝기 계산 및 램프 조명 조정
+                adjustLampLightingBasedOnBackground(bgImageData);
               };
               bgImage.onerror = function() {
                 console.warn('⚠️ Failed to load background image for color sampling');
               };
               bgImage.src = imageUrl;
               
-              console.log(`✨ Background changed to: ${detectedKeyword}!`);
+              console.log(`✨ Background auto-changed to: ${detectedKeyword}! (disabled mode)`);
+              wishInputText = ''; // 리셋
             } else {
-              console.log('⚠️ No matching keyword found. Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
+              console.log('⚠️ No matching keyword found in wish (disabled mode). Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
+            }
+          }
+          
+          currentTypedText = ''; // 텍스트 리셋
+          return;
+        }
+        
+        console.log('🔍 Checking for lamp keywords on disperse:', currentTypedText);
+        const lampKeywords = ['touch', 'rub', 'polish', 'scratch', 'stroke', 'caress', 'pat', 'tap'];
+        const textLower = currentTypedText.toLowerCase();
+        const hasLampKeyword = lampKeywords.some(keyword => textLower.includes(keyword));
+        
+        if (hasLampKeyword) {
+          touchCount++;
+          console.log('✨ LAMP INTERACTION DETECTED ON DISPERSE! Count:', touchCount);
+          
+          // 램프 흔들림 시작
+          lampShaking = true;
+          lampShakeStartTime = Date.now();
+          console.log('🪔 Lamp shaking started (auto-detected)!');
+          
+          // 세 번째 touch일 때 카메라 회전 시작 (흔들림과 동시에)
+          if (touchCount === 3) {
+            console.log('📸 Starting camera return to initial position');
+            isCameraReturning = true;
+            cameraReturnStartTime = Date.now();
+            cameraStartAngle = cameraAngle;
+            cameraTargetAngle = Math.atan2(-4.35, 1.98); // 초기 각도
+          }
+          
+          // 현재 텍스트 리셋
+          currentTypedText = '';
+          // touch 감지되면 완성 문장 카운터 리셋
+          completedSentences = 0;
+          
+          // touch 힌트 메시지가 있으면 날아가게 함
+          if (touchHintMessage) {
+            disperseTouchHint();
+          }
+        } else {
+          // touch가 없는 문장 완성
+          
+          // Make your wish 이후: 소원 키워드 자동 인식 (Enter 키 없이)
+          if (wishMessage && wishInputText.trim() !== '') {
+            const text = wishInputText.trim().toLowerCase();
+            console.log('🌍 Auto-analyzing wish on disperse:', text);
+            
+            // 텍스트에서 키워드 찾기 (keywords.js에서 불러온 데이터 사용)
+            let detectedKeyword = null;
+            for (const [category, keywords] of Object.entries(keywordMap)) {
+              if (keywords.some(keyword => text.includes(keyword))) {
+                detectedKeyword = category;
+                break;
+              }
             }
             
-            wishInputText = ''; // 리셋
-            return;
+            if (detectedKeyword && backgroundImages[detectedKeyword]) {
+              const imageUrl = backgroundImages[detectedKeyword];
+              
+              // body 배경 설정
+              document.body.style.backgroundImage = `url('${imageUrl}')`;
+              document.body.style.backgroundSize = 'cover';
+              document.body.style.backgroundPosition = 'center';
+              document.body.style.backgroundRepeat = 'no-repeat';
+              document.body.style.backgroundAttachment = 'fixed';
+              
+              // Three.js 배경 투명하게
+              scene.background = null;
+              renderer.setClearColor(0x000000, 0); // 완전 투명
+              
+              // 바닥 제거
+              if (window.floorMesh) {
+                scene.remove(window.floorMesh);
+              }
+              
+              // 안개 제거
+              scene.fog = null;
+              
+              // 배경 이미지를 숨겨진 canvas에 그려서 픽셀 데이터 읽기
+              currentBackgroundImage = imageUrl;
+              const bgImage = new Image();
+              bgImage.crossOrigin = 'anonymous';
+              bgImage.onload = function() {
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+                bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
+                bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+                console.log('📸 Background image data loaded for particle color adjustment');
+                
+                // 배경 이미지 평균 밝기 계산 및 램프 조명 조정
+                adjustLampLightingBasedOnBackground(bgImageData);
+              };
+              bgImage.onerror = function() {
+                console.warn('⚠️ Failed to load background image for color sampling');
+              };
+              bgImage.src = imageUrl;
+              
+              console.log(`✨ Background auto-changed to: ${detectedKeyword}!`);
+              wishInputText = ''; // 리셋
+            } else {
+              console.log('⚠️ No matching keyword found in wish. Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
+            }
           }
+          
+          completedSentences++;
+          console.log(`📝 Sentence completed without touch. Count: ${completedSentences}`);
+          
+          // 세 번째 문장이면 힌트 생성 (wishMessage가 없을 때만)
+          if (completedSentences >= 3 && !wishMessage) {
+            createTouchHint();
+            completedSentences = 0; // 리셋
+          }
+          
+          // 현재 텍스트 리셋
+          currentTypedText = '';
+        }
+      }
+      
+      // touch 힌트 메시지 생성 함수 (단순 버전)
+      function createTouchHint() {
+        if (touchHintMessage || touchHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        touchHintShown = true; // 표시 플래그 설정
+        console.log('💡 Creating simple touch hint message!');
+        touchHintMessage = [];
+        touchHintStartTime = Date.now();
+        const message = "touch?";
+        
+        // 램프 아래에 위치 (한글 경고 메시지와 같은 위치)
+        const msgY = window.innerHeight * 0.75;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic bold 60px 'Cormorant Garamond', serif`;
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          const spacing = Math.min(Math.max(metrics.width + 6, 30), 45);
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 60, -1); // sentenceId -1 (특별)
+          msgLetter.isTouchHint = true;
+          msgLetter.revealDelay = i * 150; // 150ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 힌트)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x;
+            p.originalY = p.y;
+            // 황금색 파티클
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`;
+          });
+          
+          touchHintMessage.push(msgLetter);
+          const spacing = Math.min(Math.max(msgLetter.width + 6, 30), 45);
+          msgCurrentX += spacing;
+        }
+      }
+      
+      // touch 힌트 메시지 날리기 함수 (일반 글자와 동일한 로직)
+      function disperseTouchHint() {
+        if (!touchHintMessage) return;
+        
+        console.log('🌪️ Dispersing touch hint message!');
+        
+        touchHintMessage.forEach((msgLetter, index) => {
+          if (msgLetter.revealed) {
+            // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+            msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+          }
+        });
+      }
+
+      // 클릭 힌트 생성 함수
+      function createClickHint() {
+        if (clickHintMessage || clickHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        clickHintShown = true; // 표시 플래그 설정
+        console.log('💡 Creating click hint message!');
+        clickHintMessage = [];
+        clickHintStartTime = Date.now();
+        const message = "I only recognize keyboard input and mouse position";
+        
+        // 램프 위쪽에 위치 (더 위로)
+        const msgY = window.innerHeight * 0.15;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic 40px 'Cormorant Garamond', serif`;
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          const spacing = Math.min(Math.max(metrics.width + 3, 20), 35);
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 40, -2); // sentenceId -2 (특별)
+          msgLetter.isClickHint = true;
+          msgLetter.revealDelay = i * 100; // 100ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 은색으로 설정 (사용자 색상)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x;
+            p.originalY = p.y;
+            // 황금색 파티클 (지니 색상)
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`;
+          });
+          
+          clickHintMessage.push(msgLetter);
+          const spacing = Math.min(Math.max(msgLetter.width + 3, 20), 35);
+          msgCurrentX += spacing;
+        }
+      }
+
+      // 클릭 힌트 분산 함수 (일반 글자와 동일한 로직)
+      function disperseClickHint() {
+        if (!clickHintMessage) return;
+        
+        console.log('🌪️ Dispersing click hint message!');
+        
+        clickHintMessage.forEach((msgLetter, index) => {
+          if (msgLetter.revealed) {
+            // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+            msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+          }
+        });
+        
+        clickHintMessage = null; // 메시지 제거
+      }
+
+      // 한글 경고 메시지 생성 함수
+      function createKoreanWarningMessage() {
+        if (koreanWarningMessage || koreanHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        koreanHintShown = true; // 표시 플래그 설정
+        koreanWarningMessage = [];
+        koreanWarningStartTime = Date.now();
+        const message = "I can't speak Korean...";
+        
+        // 램프 아래에 위치 (램프가 화면 중앙 아래쪽에 있으므로)
+        const msgY = window.innerHeight * 0.75;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic bold 50px 'Cormorant Garamond', serif`; // 70px -> 50px
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          // 자간을 줄임: 기존보다 작게 설정
+          const spacing = char === ' ' ? 18 : Math.min(Math.max(metrics.width + 4, 25), 35); // 25->18, 40->25, 55->35
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 50); // 70 -> 50px
+          msgLetter.isKoreanWarning = true;
+          msgLetter.revealDelay = i * 100; // 100ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 메시지)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x; // 원래 위치 저장 (일렁임용)
+            p.originalY = p.y;
+            // 황금색 파티클로 변경
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
+          });
+          
+          koreanWarningMessage.push(msgLetter);
+          // 동일한 자간 적용
+          const spacing = char === ' ' ? 18 : Math.min(Math.max(msgLetter.width + 4, 25), 35);
+          msgCurrentX += spacing;
+        }
+        
+        console.log('⚠️ Korean warning message created!');
+      }
+
+      // 키보드 입력 처리 (타이핑 + 카메라 회전)
+      document.addEventListener('keydown', function(event) {
+        console.log('Key pressed:', event.key);
+        
+        // 키보드 입력이 있으면 클릭 힌트 분산
+        if (clickHintMessage && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+          disperseClickHint();
+        }
+
+        // 카메라 회전 (방향키) - 누르고 있으면 계속 회전
+        if (event.key === 'ArrowLeft') {
+          isRotatingLeft = true;
+          return;
+        } else if (event.key === 'ArrowRight') {
+          isRotatingRight = true;
+          return;
+        }
+        
+        // 타이핑 처리
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          
+          // Make your wish 이후: 키워드의 마지막 글자 제거 (화면에도 적용)
+          if (wishMessage && wishInputText.length > 0) {
+            wishInputText = wishInputText.slice(0, -1);
+            console.log('Wish keyword:', wishInputText);
+            // 화면에도 반영되도록 return 제거
+          }
+          
+          // 마지막 글자 제거
+          if (letters.length > 0) {
+            const lastLetter = letters.pop();
+            const spacing = Math.min(Math.max(lastLetter.width + 8, 45), 58);
+            currentX -= spacing;
+            // 현재 텍스트에서도 마지막 글자 제거
+            currentTypedText = currentTypedText.slice(0, -1);
+          }
+          // 모든 글자가 지워지면 타이핑 상태 해제
+          if (letters.length === 0) {
+            isTyping = false;
+            currentTypedText = '';
+          }
+          lastInputTime = Date.now();
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
           
           // 램프 관련 키워드 포함 여부 확인
           console.log('Enter pressed. Current text:', currentTypedText);
@@ -918,6 +1380,13 @@
         } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
           event.preventDefault();
           
+          // 한글 입력 감지 - 지니 메시지만 생성하고 글자는 그대로 표시
+          if (isKorean(event.key)) {
+            console.log('🇰🇷 Korean input detected:', event.key);
+            createKoreanWarningMessage();
+            // 한글도 화면에 표시하도록 return 제거
+          }
+          
           // Make your wish 이후: 키워드 입력 (화면에도 표시)
           if (wishMessage) {
             wishInputText += event.key;
@@ -925,20 +1394,27 @@
             // 글자는 화면에도 표시
           }
           
-          // 타이핑 시작 시 현재 마우스 위치에서 시작
-          if (!isTyping) {
-            currentX = mouseX;
-            currentY = mouseY;
-          }
+          // 새로운 타이핑 시작 조건: 
+          // 1) 타이핑 중이 아니거나 
+          // 2) 마우스가 움직였거나
+          // 3) 마지막 입력으로부터 2초 이상 지났거나
+          // 4) 현재 위치가 화면 끝에 가까우면
+          const timeSinceLastInput = Date.now() - lastInputTime;
+          const shouldStartNewLine = !isTyping || 
+                                   mouseHasMoved ||
+                                   timeSinceLastInput > 2000 || 
+                                   currentX > canvas.width - 100;
           
-          // 화면 넘어가면 현재 마우스 위치에서 새로 시작
-          if (currentX > canvas.width - 100) {
+          if (shouldStartNewLine) {
             currentX = mouseX;
             currentY = mouseY;
+            mouseHasMoved = false; // 마우스 이동 플래그 리셋
+            currentSentenceId++; // 새로운 문장 ID 할당
+            console.log('🖱️ Starting new typing at mouse position:', { x: mouseX, y: mouseY, sentenceId: currentSentenceId });
           }
 
-          // 새 글자 생성 (인덱스 전달)
-          const letter = new Letter(event.key, currentX, currentY, letters.length);
+          // 새 글자 생성 (인덱스와 문장 ID 전달)
+          const letter = new Letter(event.key, currentX, currentY, letters.length, 80, currentSentenceId);
           letters.push(letter);
           
           // 현재 타이핑 텍스트에 추가
@@ -980,6 +1456,12 @@
 
         // 사라진 글자 제거
         letters = letters.filter(letter => !letter.isFinished());
+        
+        // 마지막 입력으로부터 2초 이상 지났으면 타이핑 상태 해제 (글자가 남아있어도)
+        const timeSinceLastInput = Date.now() - lastInputTime;
+        if (timeSinceLastInput > 2000) {
+          isTyping = false;
+        }
         
         // 모든 글자가 사라졌으면 타이핑 상태 해제
         if (letters.length === 0) {
@@ -1071,6 +1553,153 @@
             msgLetter.draw();
           });
         }
+        
+        // 한글 경고 메시지 렌더링 (왼쪽→오른쪽 순차 등장, 유지, 날아가기)
+        if (koreanWarningMessage && koreanWarningMessage.length > 0) {
+          const timeSinceWarning = Date.now() - koreanWarningStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...koreanWarningMessage.map(l => l.revealDelay));
+          
+          koreanWarningMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남 (왼쪽→오른쪽)
+            if (timeSinceWarning > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing Korean warning letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.04; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 5초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 5000;
+            if (timeSinceWarning > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Korean warning letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = koreanWarningMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            koreanWarningMessage = null;
+            console.log('🗑️ Korean warning message cleared');
+          }
+        }
+        
+        // touch 힌트 메시지 렌더링 (한글 힌트와 동일한 로직)
+        if (touchHintMessage && touchHintMessage.length > 0) {
+          const timeSinceHint = Date.now() - touchHintStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...touchHintMessage.map(l => l.revealDelay));
+          
+          touchHintMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남
+            if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing touch hint letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 5초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 5000;
+            if (timeSinceHint > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Touch hint letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = touchHintMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            touchHintMessage = null;
+            console.log('💡 Touch hint message cleared');
+          }
+        }
+        
+        // 클릭 힌트 메시지 렌더링 (한글 힌트와 동일한 로직)
+        if (clickHintMessage && clickHintMessage.length > 0) {
+          const timeSinceHint = Date.now() - clickHintStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...clickHintMessage.map(l => l.revealDelay));
+          
+          clickHintMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남
+            if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing click hint letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 5초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 5000;
+            if (timeSinceHint > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Click hint letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = clickHintMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            clickHintMessage = null;
+            console.log('💡 Click hint message cleared');
+          }
+        }
 
         // 모래 커튼 애니메이션 (화면 전환 효과) - 맨 위 레이어
         if (isExploding || explosionParticles.length > 0 || introMessage || wishMessage) {
@@ -1147,11 +1776,13 @@
                 msgLetter.disperseTime = 8.0; // 8초에 모두 날아감
                 msgLetter.revealed = false;
                 
-                // 모든 파티클을 투명하게 시작
+                // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 메시지)
                 msgLetter.particles.forEach(p => {
                   p.alpha = 0;
                   p.targetAlpha = 1;
                   p.forming = false;
+                  // 황금색 파티클로 변경
+                  p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
                 });
                 
                 partLetters.push(msgLetter);
@@ -1227,6 +1858,8 @@
                 p.alpha = 0;
                 p.targetAlpha = 1;
                 p.forming = false;
+                // 황금색 파티클로 변경 (지니 메시지)
+                p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
               });
               
               wishMessage.push(msgLetter);
@@ -1249,8 +1882,10 @@
           
           // wishMessage가 생성된 후에만 종료
           if (explosionElapsed > 9.0 && explosionParticles.length === 0 && wishMessage) {
+            if (isExploding) { // 상태가 변경될 때만 로그 출력
+              console.log('🎬 Animation sequence completed!');
+            }
             isExploding = false;
-            console.log('🎬 Animation sequence completed!');
           }
         }
 
