@@ -1,5 +1,6 @@
 // Background image handling
 import { getContrastColor, adjustLampLightingBasedOnBackground } from './utils.js';
+import { SandCurtainParticle } from './particles.js';
 
 // 배경 이미지 샘플링용 숨겨진 캔버스
 const bgCanvas = document.createElement('canvas');
@@ -50,12 +51,37 @@ export function getBackgroundColorAt(x, y, state) {
   return getContrastColor(r, g, b);
 }
 
-// 배경 변경 함수
+// 배경 변경 함수 (파티클 스윕 효과)
 export function changeBackground(imageUrl, state, threeScene) {
   const { scene, renderer, lights } = threeScene;
 
+  const overlay = document.getElementById('background-overlay');
+  if (!overlay) {
+    console.error('Background overlay element not found');
+    return;
+  }
+
+  // 이미 전환 중이면 무시
+  if (state.isTransitioningBackground) {
+    console.log('Background transition already in progress');
+    return;
+  }
+
+  // 오버레이에 새 배경 설정 (처음엔 숨김)
+  overlay.style.backgroundImage = `url('${imageUrl}')`;
+  overlay.style.clipPath = 'inset(0 100% 0 0)'; // 완전히 숨김
+
+  // 새 배경 URL 저장
+  state.pendingBackgroundImage = imageUrl;
+
+  // 파티클 생성 시작
+  state.isTransitioningBackground = true;
+  state.transitionStartTime = Date.now();
+  state.backgroundTransitionParticles = [];
+
+  console.log('🌊 Starting background transition with particle sweep');
+
   // body 배경 설정
-  document.body.style.backgroundImage = `url('${imageUrl}')`;
   document.body.style.backgroundSize = 'cover';
   document.body.style.backgroundPosition = 'center';
   document.body.style.backgroundRepeat = 'no-repeat';
@@ -91,5 +117,5 @@ export function changeBackground(imageUrl, state, threeScene) {
   };
   bgImage.src = imageUrl;
 
-  console.log(`✨ Background changed to: ${imageUrl}!`);
+  console.log(`✨ Background transition started: ${imageUrl}!`);
 }

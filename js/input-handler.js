@@ -4,6 +4,9 @@ import { isKorean } from './utils.js';
 import { createKoreanWarningMessage, createTouchHint, createEnterHint } from './hint-system.js';
 import { changeBackground, getBackgroundColorAt } from './background.js';
 
+// keywordMap과 backgroundImages는 keywords.js에서 전역 변수로 로드됨
+/* global keywordMap, backgroundImages */
+
 export function setupInputHandlers(state, threeScene, canvas) {
   const { scene, cameraAngle, updateCameraAngle } = threeScene;
 
@@ -19,18 +22,10 @@ export function setupInputHandlers(state, threeScene, canvas) {
 
     if (mouseMoveDistance > 10) {
       state.mouseHasMoved = true;
-      console.log('🖱️ Mouse moved significantly, next typing will start at new position');
     }
 
     state.lastMouseX = state.mouseX;
     state.lastMouseY = state.mouseY;
-
-    // 마우스 위치 1초마다 콘솔 출력
-    const now = Date.now();
-    if (now - state.lastMouseLogTime > 1000) {
-      console.log('Mouse Position:', { x: state.mouseX, y: state.mouseY });
-      state.lastMouseLogTime = now;
-    }
   });
 
   // 마우스 클릭 시 카메라 위치 출력
@@ -230,13 +225,6 @@ export function setupInputHandlers(state, threeScene, canvas) {
         // 한글도 화면에 표시하도록 return 제거
       }
 
-      // Make your wish 이후: 키워드 입력 (화면에도 표시)
-      if (state.wishMessage) {
-        state.wishInputText += event.key;
-        console.log('Wish keyword:', state.wishInputText);
-        // 글자는 화면에도 표시
-      }
-
       // 새로운 타이핑 시작 조건:
       // 1) 타이핑 중이 아니거나
       // 2) 마우스가 움직였거나
@@ -254,6 +242,19 @@ export function setupInputHandlers(state, threeScene, canvas) {
         state.mouseHasMoved = false; // 마우스 이동 플래그 리셋
         state.currentSentenceId++; // 새로운 문장 ID 할당
         console.log('🖱️ Starting new typing at mouse position:', { x: state.mouseX, y: state.mouseY, sentenceId: state.currentSentenceId });
+
+        // 새로운 줄 시작 시 wishInputText도 리셋 (엔터 없이 날아간 문장은 무시)
+        if (state.wishMessage) {
+          console.log('🗑️ Clearing wish input text (new line started without Enter):', state.wishInputText);
+          state.wishInputText = '';
+        }
+      }
+
+      // Make your wish 이후: 키워드 입력 (화면에도 표시) - shouldStartNewLine 이후에 추가
+      if (state.wishMessage) {
+        state.wishInputText += event.key;
+        console.log('Wish keyword:', state.wishInputText);
+        // 글자는 화면에도 표시
       }
 
       // 새 글자 생성 (인덱스와 문장 ID 전달)

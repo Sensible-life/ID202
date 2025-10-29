@@ -1,5 +1,56 @@
 // Particle classes
 
+// 배경 전환용 파티클 (단순히 왼→오로 이동)
+export class BackgroundTransitionParticle {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.originalX = x;
+    this.originalY = y;
+
+    // 다양한 크기
+    const sizeRandom = Math.random();
+    this.size = sizeRandom < 0.5
+      ? Math.random() * 1 + 0.5 // 50%는 작은 입자 (0.5~1.5)
+      : Math.random() * 2.5 + 1.5; // 50%는 큰 입자 (1.5~4.0)
+
+    // 황금색 파티클
+    const hue = 40 + Math.random() * 15; // 40~55 (황금색)
+    const saturation = 70 + Math.random() * 20; // 70~90
+    const lightness = 50 + Math.random() * 20; // 50~70
+    this.color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+
+    // 오른쪽으로 이동 속도
+    this.vx = Math.random() * 15 + 10; // 10~25
+    this.vy = (Math.random() - 0.5) * 2; // 약간의 상하 움직임
+
+    // 투명도
+    this.alpha = 0.8 + Math.random() * 0.2; // 0.8~1.0
+
+    this.createdAt = Date.now();
+  }
+
+  update() {
+    // 단순히 오른쪽으로 이동
+    this.x += this.vx;
+    this.y += this.vy;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  isDead() {
+    return false; // 절대 죽지 않음 (animation.js에서 위치로 제거)
+  }
+}
+
 // 모래 커튼 파티클 클래스 (입체적 화면 전환)
 export class SandCurtainParticle {
   constructor(x, y, direction, spawnDelay) {

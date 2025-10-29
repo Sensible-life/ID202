@@ -1,5 +1,5 @@
 // Main animation loop
-import { SandCurtainParticle } from './particles.js';
+import { SandCurtainParticle, BackgroundTransitionParticle } from './particles.js';
 import { Letter } from './letter.js';
 import { getBackgroundColorAt } from './background.js';
 
@@ -33,7 +33,7 @@ function createIntroMessage(state, getBackgroundColorAtFunc, createEnterHintFunc
       const msgLetter = new Letter(char, currentX, y, i, 55, 0, state, getBackgroundColorAtFunc, createEnterHintFunc); // 작은 글씨 (55px)
       msgLetter.isIntroMessage = true;
       msgLetter.introPart = partIndex;
-      msgLetter.disperseTime = 8.0; // 8초에 모두 날아감
+      msgLetter.disperseTime = 9.0; // 9초에 모두 날아감
       msgLetter.revealed = false;
 
       // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 메시지)
@@ -145,6 +145,19 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); // 투명 배경
 
+    // 성능 디버깅: 30초마다 현재 상태 출력 (최적화됨)
+    const now = Date.now();
+    if (!state.lastPerformanceLog || now - state.lastPerformanceLog > 30000) {
+      console.log('🔍 Performance Check:', {
+        letters: state.letters.length,
+        explosionParticles: state.explosionParticles.length,
+        messages: (state.introMessage?.length || 0) + (state.wishMessage?.length || 0) +
+                  (state.koreanWarningMessage?.length || 0) + (state.touchHintMessage?.length || 0) +
+                  (state.clickHintMessage?.length || 0) + (state.enterHintMessage?.length || 0)
+      });
+      state.lastPerformanceLog = now;
+    }
+
     // 일반 글자 업데이트 및 그리기 (맨 아래)
     state.letters.forEach(letter => {
       letter.update();
@@ -169,15 +182,12 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
     if (state.introMessage && state.introMessage.length > 0) {
       const timeSinceExplosion = (Date.now() - state.explosionStartTime) / 1000;
 
-      state.introMessage.forEach((msgLetter, index) => {
+      state.introMessage.forEach((msgLetter) => {
         msgLetter.update();
 
         // 커튼이 지나간 후 순차적으로 드러남 (오른쪽→왼쪽, 파트별 시차)
         if (timeSinceExplosion > msgLetter.revealDelay && !msgLetter.revealed) {
           msgLetter.revealed = true;
-          if (index % 10 === 0) { // 매 10번째 글자마다 로그
-            console.log(`✨ Revealing intro part ${msgLetter.introPart} at ${timeSinceExplosion.toFixed(1)}s`);
-          }
         }
 
         // 드러난 글자 페이드인
@@ -207,7 +217,7 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         letter.particles.every(p => p.alpha <= 0)
       );
 
-      if (allGone && timeSinceExplosion > 9.0) {
+      if (allGone && timeSinceExplosion > 10.0) {
         state.introMessage = null; // 정리
       }
     }
@@ -220,8 +230,8 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         // update 호출
         msgLetter.update();
 
-        // 8.2초 이후 순차적으로 드러남 (introMessage 날아가면서, 살짝 늦게)
-        const revealStartTime = 8.2;
+        // 9.5초 이후 순차적으로 드러남 (introMessage 날아가면서, 살짝 늦게)
+        const revealStartTime = 9.5;
         const timeSinceRevealStart = timeSinceExplosion - revealStartTime;
 
         if (timeSinceRevealStart > msgLetter.revealDelay) {
@@ -258,13 +268,12 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
       // 마지막 글자의 revealDelay 계산
       const lastLetterRevealDelay = Math.max(...state.koreanWarningMessage.map(l => l.revealDelay));
 
-      state.koreanWarningMessage.forEach((msgLetter, index) => {
+      state.koreanWarningMessage.forEach((msgLetter) => {
         msgLetter.update();
 
         // 순차적으로 드러남 (왼쪽→오른쪽)
         if (timeSinceWarning > msgLetter.revealDelay && !msgLetter.revealed) {
           msgLetter.revealed = true;
-          console.log(`Revealing Korean warning letter ${index}: "${msgLetter.char}"`);
         }
 
         // 드러난 글자 페이드인
@@ -283,7 +292,6 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           msgLetter.dispersed = true;
           // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
           msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
-          console.log(`Korean warning letter ${index} starting to disperse`);
         }
 
         msgLetter.draw(ctx);
@@ -307,13 +315,12 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
       // 마지막 글자의 revealDelay 계산
       const lastLetterRevealDelay = Math.max(...state.touchHintMessage.map(l => l.revealDelay));
 
-      state.touchHintMessage.forEach((msgLetter, index) => {
+      state.touchHintMessage.forEach((msgLetter) => {
         msgLetter.update();
 
         // 순차적으로 드러남
         if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
           msgLetter.revealed = true;
-          console.log(`Revealing touch hint letter ${index}: "${msgLetter.char}"`);
         }
 
         // 드러난 글자 페이드인
@@ -332,7 +339,6 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           msgLetter.dispersed = true;
           // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
           msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
-          console.log(`Touch hint letter ${index} starting to disperse`);
         }
 
         msgLetter.draw(ctx);
@@ -356,13 +362,12 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
       // 마지막 글자의 revealDelay 계산
       const lastLetterRevealDelay = Math.max(...state.clickHintMessage.map(l => l.revealDelay));
 
-      state.clickHintMessage.forEach((msgLetter, index) => {
+      state.clickHintMessage.forEach((msgLetter) => {
         msgLetter.update();
 
         // 순차적으로 드러남
         if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
           msgLetter.revealed = true;
-          console.log(`Revealing click hint letter ${index}: "${msgLetter.char}"`);
         }
 
         // 드러난 글자 페이드인
@@ -381,7 +386,6 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           msgLetter.dispersed = true;
           // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
           msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
-          console.log(`Click hint letter ${index} starting to disperse`);
         }
 
         msgLetter.draw(ctx);
@@ -405,13 +409,12 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
       // 마지막 글자의 revealDelay 계산
       const lastLetterRevealDelay = Math.max(...state.enterHintMessage.map(l => l.revealDelay));
 
-      state.enterHintMessage.forEach((msgLetter, index) => {
+      state.enterHintMessage.forEach((msgLetter) => {
         msgLetter.update();
 
         // 순차적으로 드러남
         if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
           msgLetter.revealed = true;
-          console.log(`Revealing Enter hint letter ${index}: "${msgLetter.char}"`);
         }
 
         // 드러난 글자 페이드인
@@ -430,7 +433,6 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           msgLetter.dispersed = true;
           // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
           msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
-          console.log(`Enter hint letter ${index} starting to disperse`);
         }
 
         msgLetter.draw(ctx);
@@ -451,13 +453,10 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
     if (state.isExploding || state.explosionParticles.length > 0 || state.introMessage || state.wishMessage) {
       const explosionElapsed = (Date.now() - state.explosionStartTime) / 1000;
 
-      // 디버깅: 타이밍 로그 (5초마다)
-      if (Math.floor(explosionElapsed) % 5 === 0 && Math.floor(explosionElapsed * 10) % 50 === 0) {
-        console.log(`⏱️ Time: ${explosionElapsed.toFixed(1)}s, introMessage: ${state.introMessage ? 'exists' : 'null'}, wishMessage: ${state.wishMessage ? 'exists' : 'null'}`);
-      }
+      // 타이밍 디버깅 제거 (성능 최적화)
 
-      // 주둥이에서 계속 파티클 생성 (처음 1.5초 동안 - 더 길게)
-      if (explosionElapsed < 1.5) {
+      // 주둥이에서 계속 파티클 생성 (처음 1.5초 동안만 - 더 길게)
+      if (state.isExploding && explosionElapsed < 1.5) {
         // 고정된 화면 좌표 사용 (주둥이 끝 위치)
         const spoutX = 469;
         const spoutY = 325; // 아주 살짝 위로 (329 → 325)
@@ -480,22 +479,24 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         }
       }
 
-      // 파티클 업데이트 및 그리기
-      state.explosionParticles.forEach(p => {
-        p.update();
-        p.draw(ctx);
-      });
+      // 파티클 업데이트 및 그리기 (파티클이 있을 때만)
+      if (state.explosionParticles.length > 0) {
+        state.explosionParticles.forEach(p => {
+          p.update();
+          p.draw(ctx);
+        });
 
-      // 죽은 파티클 제거
-      state.explosionParticles = state.explosionParticles.filter(p => !p.isDead());
+        // 죽은 파티클 제거
+        state.explosionParticles = state.explosionParticles.filter(p => !p.isDead());
+      }
 
       // 0.3초 후 중간 메시지 생성 (커튼과 함께 드러남)
       if (explosionElapsed > 0.3 && !state.introMessage && !state.wishMessage) {
         createIntroMessage(state, getBackgroundColorAtFunc, createEnterHintFunc);
       }
 
-      // 8.0초 후 "Make your wish" 메시지 생성 (introMessage가 날아가면서)
-      if (explosionElapsed > 8.0 && state.introMessage && !state.wishMessage) {
+      // 9.0초 후 "Make your wish" 메시지 생성 (introMessage가 날아가면서)
+      if (explosionElapsed > 9.0 && state.introMessage && !state.wishMessage) {
         createWishMessage(state, getBackgroundColorAtFunc, createEnterHintFunc);
       }
 
@@ -505,6 +506,80 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           console.log('🎬 Animation sequence completed!');
         }
         state.isExploding = false;
+      }
+    }
+
+    // 배경 전환 파티클 애니메이션 (최상위 레이어)
+    if (state.isTransitioningBackground) {
+      const transitionElapsed = (Date.now() - state.transitionStartTime) / 1000;
+
+      // 파티클 생성 (처음 0.5초 동안만 생성)
+      if (transitionElapsed < 0.5) {
+        // 화면을 완전히 덮기 위해 대량 파티클 생성
+        for (let i = 0; i < 200; i++) {
+          const startX = -50; // 화면 왼쪽 밖에서 시작
+          const startY = Math.random() * canvas.height; // 전체 높이에 균등 분포
+
+          state.backgroundTransitionParticles.push(
+            new BackgroundTransitionParticle(startX, startY)
+          );
+        }
+      }
+
+      // 파티클 업데이트 및 그리기
+      if (state.backgroundTransitionParticles.length > 0) {
+        state.backgroundTransitionParticles.forEach(p => {
+          p.update();
+          p.draw(ctx);
+        });
+
+        // 파티클의 선두(오른쪽 끝)와 후미(왼쪽 끝) 위치 계산
+        const frontX = Math.max(...state.backgroundTransitionParticles.map(p => p.x), 0);
+        const backX = Math.min(...state.backgroundTransitionParticles.map(p => p.x), 0);
+
+        const progress = Math.min(Math.max(frontX / canvas.width, 0), 1);
+
+        // 오버레이를 파티클 선두 위치까지만 드러냄 (왼쪽부터 점진적으로)
+        const overlay = document.getElementById('background-overlay');
+        if (overlay) {
+          const revealPercent = progress * 100;
+          // inset(top right bottom left) - right를 조정해서 왼쪽부터 드러냄
+          overlay.style.clipPath = `inset(0 ${100 - revealPercent}% 0 0)`;
+        }
+
+        // 파티클의 후미(가장 왼쪽)가 화면을 완전히 벗어났는지 확인
+        const allParticlesPassedScreen = backX > canvas.width + 100;
+
+        if (allParticlesPassedScreen) {
+          console.log('✅ All particles have passed the screen, clearing particles');
+          state.backgroundTransitionParticles = [];
+        }
+      }
+
+      // 전환 완료 (모든 파티클이 화면을 완전히 벗어남 OR 5초 타임아웃)
+      const shouldComplete = (state.backgroundTransitionParticles.length === 0 && transitionElapsed > 1.0) ||
+                              transitionElapsed > 5.0;
+
+      if (shouldComplete) {
+        console.log('✅ Background transition complete at', transitionElapsed.toFixed(2), 's');
+
+        // 새 배경을 실제 body로 교체
+        if (state.pendingBackgroundImage) {
+          document.body.style.backgroundImage = `url('${state.pendingBackgroundImage}')`;
+          console.log('🖼️ Final background swap complete');
+        }
+
+        // 오버레이 초기화
+        const overlay = document.getElementById('background-overlay');
+        if (overlay) {
+          overlay.style.backgroundImage = 'none';
+          overlay.style.clipPath = 'inset(0 100% 0 0)';
+        }
+
+        // 상태 정리
+        state.isTransitioningBackground = false;
+        state.backgroundTransitionParticles = [];
+        state.pendingBackgroundImage = null;
       }
     }
 

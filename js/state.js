@@ -71,7 +71,16 @@ export const state = {
 
   // Background
   bgImageData: null,
-  currentBackgroundImage: null
+  currentBackgroundImage: null,
+
+  // Background transition
+  backgroundTransitionParticles: [],
+  isTransitioningBackground: false,
+  transitionStartTime: 0,
+  pendingBackgroundImage: null,
+
+  // Performance monitoring
+  lastPerformanceLog: 0
 };
 
 // Initialize mouse position to center
