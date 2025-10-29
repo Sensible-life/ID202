@@ -1,0 +1,1973 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="input-mode" content="latin">
+    <meta http-equiv="Content-Language" content="en">
+    <title>Sand Letters</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/loading.css">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="keywords.js"></script>
+    <script src="loading.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: monospace;
+        /* 영어 입력 모드 유도 */
+        ime-mode: disabled;
+        -ms-ime-mode: disabled;
+      }
+      #three-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        pointer-events: none; /* 마우스 입력 차단 */
+      }
+      #canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 2;
+        cursor: text;
+        pointer-events: none; /* 마우스 이벤트는 window에서 받음 */
+      }
+    </style>
+  </head>
+  <body lang="en">
+    <div id="three-container"></div>
+    <canvas id="canvas"></canvas>
+
+    <script>
+      // 페이지 로드 시 IME(한글 입력) 비활성화 유도
+      document.addEventListener('DOMContentLoaded', function() {
+        document.body.setAttribute('lang', 'en');
+        // 페이지 포커스 시 영어 입력 모드 유도
+        window.focus();
+      });
+      
+      // 키 입력 시작 시 영어 입력 유도
+      let isFirstInput = true;
+      document.addEventListener('keydown', function(e) {
+        if (isFirstInput && e.key.length === 1) {
+          isFirstInput = false;
+          console.log('✍️ English input mode recommended');
+        }
+      }, { once: false });
+    </script>
+    
+    <script>
+      // Three.js 3D 씬 설정
+      const scene = new THREE.Scene();
+      const floorColor = 0x1a1a1a; // 약간 밝은 검은색
+      scene.background = new THREE.Color(floorColor); // 배경과 바닥 색상 통일
+      scene.fog = new THREE.Fog(floorColor, 20, 100); // 안개 효과로 무한 느낌
+      
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // 배경 투명 가능하도록
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      document.getElementById('three-container').appendChild(renderer.domElement);
+
+      // 무한 확장되는 바닥 (매우 크게)
+      const roomSize = 200;
+      const floorGeometry = new THREE.PlaneGeometry(roomSize, roomSize);
+      const floorMaterial = new THREE.MeshStandardMaterial({ 
+        color: floorColor,
+        roughness: 0.9,
+        metalness: 0.1
+      });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -5;
+      floor.receiveShadow = true;
+      scene.add(floor);
+      window.floorMesh = floor; // 나중에 제거할 수 있도록 저장
+
+      // GLB 램프 모델 로드
+      const lampGroup = new THREE.Group();
+      lampGroup.position.set(0, -5.0, 0); // 바닥에 더 가까이
+      scene.add(lampGroup);
+      
+      // GLTFLoader로 GLB 파일 로드
+      const loader = new THREE.GLTFLoader();
+      loader.load('alladins_lamp.glb', 
+        function(gltf) {
+          console.log('✨ Lamp model loaded!');
+          const lampModel = gltf.scene;
+          
+          // 크기 조정 (적당한 크기)
+          lampModel.scale.set(12.0,   12.0, 12.0);
+          
+          // 회전 (180도)
+          lampModel.rotation.y = Math.PI;
+          
+          // 그림자 설정
+          lampModel.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+          
+          lampGroup.add(lampModel);
+        },
+        function(xhr) {
+          console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+        },
+        function(error) {
+          console.error('❌ Error loading lamp model:', error);
+        }
+      );
+
+      // 조명 설정 (밝게)
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); // 0.5 → 1.2
+      scene.add(ambientLight);
+
+      // 램프에서 나오는 밝은 빛
+      const lampLight = new THREE.PointLight(0xffffff, 8, 60); // 4 → 8
+      lampLight.position.set(0, -4.5, 0); // 램프 위치에 맞춤
+      scene.add(lampLight);
+
+      // 메인 조명 (왼쪽으로 60도 회전, 낮은 각도)
+      const mainLight = new THREE.DirectionalLight(0xffffff, 1.5); // 0.9 → 1.5
+      mainLight.position.set(-3.3, 1.5, -6.7); // 왼쪽 60도, 낮은 위치
+      mainLight.target.position.set(0, -5, 0); // 램프를 향함
+      scene.add(mainLight.target);
+      mainLight.castShadow = true;
+      mainLight.shadow.mapSize.width = 2048;
+      mainLight.shadow.mapSize.height = 2048;
+      mainLight.shadow.camera.left = -10;
+      mainLight.shadow.camera.right = 10;
+      mainLight.shadow.camera.top = 10;
+      mainLight.shadow.camera.bottom = -10;
+      mainLight.shadow.camera.near = 0.5;
+      mainLight.shadow.camera.far = 20;
+      scene.add(mainLight);
+
+      // 카메라 초기 위치 설정
+      camera.position.set(1.98, -0.12, -4.35);
+      camera.lookAt(0, -5, 0); // 램프를 바라봄
+      camera.fov = 95;
+      camera.updateProjectionMatrix();
+      
+      // 키보드 회전용 변수 (OrbitControls와 별도)
+      let cameraDistance = Math.sqrt(1.98*1.98 + 4.35*4.35);
+      let cameraAngle = Math.atan2(-4.35, 1.98);
+      let cameraHeight = -0.12;
+      
+      function updateCameraPosition() {
+        camera.position.x = Math.cos(cameraAngle) * cameraDistance;
+        camera.position.y = cameraHeight;
+        camera.position.z = Math.sin(cameraAngle) * cameraDistance;
+        camera.lookAt(0, -5, 0); // 램프를 바라봄
+      }
+      
+      
+      // 키보드 회전을 위한 변수
+      let isRotatingLeft = false;
+      let isRotatingRight = false;
+      let rotationVelocity = 0;
+      const maxRotationSpeed = 0.03;
+      const rotationAcceleration = 0.002;
+      const rotationDeceleration = 0.001;
+      
+      // 카메라 초기 위치로 복귀 (touch 3번 시)
+      let isCameraReturning = false;
+      let cameraReturnStartTime = 0;
+      let cameraStartAngle = 0;
+      let cameraTargetAngle = 0;
+      
+      // touch 카운터 및 램프 애니메이션 변수
+      let touchCount = 0;
+      let lampShaking = false;
+      let lampShakeStartTime = 0;
+      let currentTypedText = '';
+      let introMessage = null; // 중간 문장 ("Wish for a new world..." 3부분)
+      let wishMessage = null;
+      let wishInputText = ''; // Make your wish 이후 입력되는 키워드
+      let explosionParticles = []; // 주둥이에서 폭발하는 파티클
+      let isExploding = false;
+      let explosionStartTime = 0;
+      let koreanWarningMessage = null; // 한글 경고 메시지
+      let koreanWarningStartTime = 0;
+      let completedSentences = 0; // 완성된 문장 수 (touch 없이)
+      let touchHintMessage = null; // touch 힌트 메시지
+      let touchHintStartTime = 0;
+      let touchInteractionsEnabled = true; // touch 상호작용 활성화 여부
+      let clickHintMessage = null; // 클릭 힌트 메시지
+      let clickHintStartTime = 0;
+      let touchHintShown = false; // touch 힌트가 이미 표시되었는지 추적
+      let clickHintShown = false; // 클릭 힌트가 이미 표시되었는지 추적
+      let koreanHintShown = false; // 한글 힌트가 이미 표시되었는지 추적
+      let enterHintMessage = null; // Enter 키 힌트 메시지
+      let enterHintStartTime = 0;
+      let enterHintShown = false; // Enter 힌트가 이미 표시되었는지 추적
+      let sentencesWithoutEnter = 0; // 엔터 없이 사라진 문장 수
+
+      // Three.js 애니메이션
+      function animateThree() {
+        requestAnimationFrame(animateThree);
+        
+        // 램프 불빛이 아주 은은하게 깜박임
+        lampLight.intensity = 2.5 + Math.sin(Date.now() * 0.0008) * 0.3;
+        
+        // 램프 흔들림 애니메이션 (touch 횟수에 따라 점진적으로 강해짐)
+        if (lampShaking) {
+          const elapsed = (Date.now() - lampShakeStartTime) / 1000; // 초 단위
+          
+          // touch 횟수에 따른 강도와 지속 시간 (1->2->3)
+          const intensityMultiplier = touchCount * 0.4; // 0.4, 0.8, 1.2 (첫번째 더 약하게)
+          const duration = touchCount === 1 ? 1.5 : (touchCount === 2 ? 2.5 : 4); // 1.5초, 2.5초, 4초
+          
+          if (elapsed < duration) {
+            const t = elapsed / duration; // 0~1
+            
+            // ease-in-out 함수로 부드러운 시작과 끝
+            const easeInOut = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            const shake = (1 - easeInOut); // 점점 약해짐 (부드럽게)
+            
+            // 시작 부분 ease-in (처음 0.2초 동안 점진적으로 강해짐)
+            const easeInFactor = elapsed < 0.2 ? (elapsed / 0.2) * (elapsed / 0.2) : 1; // quadratic ease-in
+            
+            const finalShake = shake * easeInFactor;
+            
+            lampGroup.rotation.x = Math.sin(Date.now() * 0.008) * finalShake * 0.3 * intensityMultiplier;
+            lampGroup.rotation.y = Math.sin(Date.now() * 0.011) * finalShake * 0.4 * intensityMultiplier;
+            lampGroup.rotation.z = Math.sin(Date.now() * 0.009) * finalShake * 0.25 * intensityMultiplier;
+          } else {
+            // 원위치로 부드럽게 복귀
+            lampGroup.rotation.x *= 0.85;
+            lampGroup.rotation.y *= 0.85;
+            lampGroup.rotation.z *= 0.85;
+            
+            if (Math.abs(lampGroup.rotation.x) < 0.01 && 
+                Math.abs(lampGroup.rotation.y) < 0.01 && 
+                Math.abs(lampGroup.rotation.z) < 0.01) {
+              lampGroup.rotation.set(0, 0, 0);
+              lampShaking = false;
+              console.log('Lamp stopped shaking');
+              
+              // 세 번째 touch일 때만 모래바람 시작
+              if (touchCount === 3) {
+                console.log('🌪️ Starting sand storm!');
+                isExploding = true;
+                explosionStartTime = Date.now();
+                // 화면 전환 시작으로 touch 상호작용 비활성화
+                touchInteractionsEnabled = false;
+                console.log('🚫 Touch interactions disabled due to screen transition');
+                
+                // 남아있는 touch 힌트 메시지도 함께 날리기
+                if (touchHintMessage) {
+                  console.log('🌪️ Dispersing remaining touch hint during screen transition');
+                  disperseTouchHint();
+                }
+              }
+            }
+          }
+        }
+        
+        // 카메라 초기 위치로 복귀 (touch 3번 시)
+        if (isCameraReturning) {
+          const returnDuration = 2.0; // 2초에 걸쳐 복귀
+          const returnElapsed = (Date.now() - cameraReturnStartTime) / 1000;
+          const returnProgress = Math.min(returnElapsed / returnDuration, 1.0);
+          
+          // ease-in-out 함수
+          const easeInOut = returnProgress < 0.5 
+            ? 2 * returnProgress * returnProgress 
+            : 1 - Math.pow(-2 * returnProgress + 2, 2) / 2;
+          
+          // 각도 차이 계산 (최단 경로로 회전)
+          let angleDiff = cameraTargetAngle - cameraStartAngle;
+          // -PI ~ PI 범위로 정규화
+          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+          
+          cameraAngle = cameraStartAngle + angleDiff * easeInOut;
+          updateCameraPosition();
+          
+          if (returnProgress >= 1.0) {
+            isCameraReturning = false;
+            console.log('📸 Camera returned to initial position');
+          }
+        }
+        
+        // 부드러운 카메라 회전 (ease in/out) - 키보드
+        if (!isCameraReturning && (isRotatingLeft || isRotatingRight)) {
+          // 가속
+          if (isRotatingLeft) {
+            rotationVelocity = Math.min(rotationVelocity + rotationAcceleration, maxRotationSpeed);
+          } else if (isRotatingRight) {
+            rotationVelocity = Math.max(rotationVelocity - rotationAcceleration, -maxRotationSpeed);
+          }
+        } else if (!isCameraReturning) {
+          // 감속
+          if (Math.abs(rotationVelocity) > 0.0001) {
+            rotationVelocity *= (1 - rotationDeceleration * 10);
+            if (Math.abs(rotationVelocity) < 0.0001) {
+              rotationVelocity = 0;
+            }
+          }
+        }
+        
+        // 회전 적용
+        if (rotationVelocity !== 0) {
+          cameraAngle += rotationVelocity;
+          updateCameraPosition();
+        }
+        
+        renderer.render(scene, camera);
+      }
+      animateThree();
+
+      // 2D 캔버스 설정
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // 캔버스 크기 설정
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // 배경 이미지 샘플링용 숨겨진 캔버스
+      const bgCanvas = document.createElement('canvas');
+      const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+      bgCanvas.width = window.innerWidth;
+      bgCanvas.height = window.innerHeight;
+      let bgImageData = null;
+      let currentBackgroundImage = null;
+      
+      // 배경색에서 대비되는 색상 계산 함수
+      function getContrastColor(r, g, b) {
+        // 명도 계산 (0~255)
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        
+        // 밝은 배경이면 어두운 색, 어두운 배경이면 밝은 색
+        if (brightness > 128) {
+          // 밝은 배경 -> 어두운 금색/갈색
+          return `rgba(139, 90, 43, ${0.8 + Math.random() * 0.2})`;
+        } else {
+          // 어두운 배경 -> 밝은 금색
+          return `rgba(255, 215, 100, ${0.8 + Math.random() * 0.2})`;
+        }
+      }
+      
+      // 배경 이미지 밝기 분석 및 램프 조명 조정 함수
+      function adjustLampLightingBasedOnBackground(imageData) {
+        const data = imageData.data;
+        let totalBrightness = 0;
+        let sampleCount = 0;
+        
+        // 이미지 중앙 영역의 밝기를 샘플링 (램프가 위치한 부분)
+        const centerX = Math.floor(imageData.width / 2);
+        const centerY = Math.floor(imageData.height / 2);
+        const sampleRadius = Math.min(imageData.width, imageData.height) / 6; // 중앙 1/3 영역
+        
+        for (let y = centerY - sampleRadius; y < centerY + sampleRadius; y += 10) {
+          for (let x = centerX - sampleRadius; x < centerX + sampleRadius; x += 10) {
+            if (x >= 0 && x < imageData.width && y >= 0 && y < imageData.height) {
+              const index = (y * imageData.width + x) * 4;
+              const r = data[index];
+              const g = data[index + 1];
+              const b = data[index + 2];
+              
+              // 명도 계산 (0~255)
+              const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+              totalBrightness += brightness;
+              sampleCount++;
+            }
+          }
+        }
+        
+        const averageBrightness = totalBrightness / sampleCount;
+        const normalizedBrightness = averageBrightness / 255; // 0~1
+        
+        console.log(`📊 Background brightness: ${averageBrightness.toFixed(1)} (normalized: ${normalizedBrightness.toFixed(2)})`);
+        
+        // 어두운 배경일수록 조명을 밝게 (0.3~1.0 범위에서 1.5~4.0으로 매핑)
+        const lightIntensity = Math.max(1.5, (1 - normalizedBrightness) * 2.5 + 1.5);
+        
+        // 앰비언트 라이트 조정
+        ambientLight.intensity = Math.max(0.8, (1 - normalizedBrightness) * 1.0 + 0.8);
+        
+        // 램프 라이트 조정
+        lampLight.intensity = Math.max(6, lightIntensity * 8);
+        
+        // 메인 라이트 조정
+        mainLight.intensity = Math.max(1.0, lightIntensity * 1.2);
+        
+        console.log(`💡 Adjusted lighting - Ambient: ${ambientLight.intensity.toFixed(2)}, Lamp: ${lampLight.intensity.toFixed(2)}, Main: ${mainLight.intensity.toFixed(2)}`);
+      }
+      
+      // 파티클 위치의 배경색 가져오기
+      function getBackgroundColorAt(x, y) {
+        if (!bgImageData) {
+          // 배경 이미지 없으면 기본 금색
+          return `hsl(45, 85%, ${Math.random() * 15 + 55}%)`;
+        }
+        
+        const px = Math.floor(x);
+        const py = Math.floor(y);
+        
+        if (px < 0 || px >= bgCanvas.width || py < 0 || py >= bgCanvas.height) {
+          return `hsl(45, 85%, ${Math.random() * 15 + 55}%)`;
+        }
+        
+        const index = (py * bgCanvas.width + px) * 4;
+        const r = bgImageData.data[index];
+        const g = bgImageData.data[index + 1];
+        const b = bgImageData.data[index + 2];
+        
+        return getContrastColor(r, g, b);
+      }
+
+      // 모래 커튼 파티클 클래스 (입체적 화면 전환)
+      class SandCurtainParticle {
+        constructor(x, y, direction, spawnDelay) {
+          this.spawnDelay = spawnDelay;
+          this.spawned = false;
+          
+          this.startX = x;
+          this.startY = y;
+          this.x = x;
+          this.y = y;
+          
+          // 훨씬 더 다양한 크기 (작은 입자부터 큰 입자까지)
+          const sizeRandom = Math.random();
+          this.baseSize = sizeRandom < 0.6 ? 
+            Math.random() * 0.5 + 0.2 : // 60%는 작은 입자 (0.2~0.7)
+            Math.random() * 1.5 + 0.5;   // 40%는 큰 입자 (0.5~2.0)
+          this.size = this.baseSize;
+          
+          // 진한 갈색빛의 모래 색상 (약간 밝게)
+          const hue = 25 + Math.random() * 15; // 25~40 (진한 갈색)
+          const saturation = 25 + Math.random() * 20; // 25~45 (채도 더 낮춤)
+          const lightness = 30 + Math.random() * 25; // 30~55 (조금 밝게)
+          this.color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+          
+          this.direction = direction; // 1: 오른쪽, -1: 왼쪽
+          
+          // 좁은 범위로 방사 (한 점에서 집중적으로)
+          const angleVariation = (Math.random() - 0.3) * 1.0; // -0.3~0.7 라디안 (좁게)
+          const baseSpeed = Math.random() * 20 + 15; // 15~35 (더 다양한 속도)
+          this.vx = direction * baseSpeed * Math.cos(angleVariation);
+          this.vy = baseSpeed * Math.sin(angleVariation);
+          
+          // 중력 효과
+          this.gravity = 0.15 + Math.random() * 0.1; // 0.15~0.25 (개별 중력)
+          
+          // 랜덤 요소 추가 (불규칙성)
+          this.randomOffset = Math.random();
+          this.curveStrength = (Math.random() - 0.5) * 0.5; // 곡선 강도 증가
+          
+          // 회전 효과
+          this.rotation = Math.random() * Math.PI * 2;
+          this.rotationSpeed = (Math.random() - 0.5) * 0.2; // -0.1~0.1
+          
+          // 투명도 랜덤 변화
+          this.baseAlpha = 0.7 + Math.random() * 0.3; // 0.7~1.0
+          this.alphaFlicker = Math.random() * 0.1; // 깜빡임 강도
+          
+          this.z = 0;
+          this.vz = 0;
+          
+          this.phase = 0;
+          this.alpha = this.baseAlpha;
+          this.createdAt = Date.now();
+        }
+        
+        update() {
+          if (!this.spawned) {
+            if (Date.now() - this.createdAt > this.spawnDelay) {
+              this.spawned = true;
+            } else {
+              return;
+            }
+          }
+          
+          const elapsed = (Date.now() - this.createdAt - this.spawnDelay) / 1000;
+          
+          if (this.phase === 0) {
+            // Phase 0: 주둥이에서 화면 밖으로 (0~0.7초) - 곡선 궤적 + 중력
+            // 중력 적용
+            this.vy += this.gravity;
+            
+            this.x += this.vx;
+            this.y += this.vy;
+            
+            // 곡선 움직임 추가 (불규칙한 곡선으로 퍼짐)
+            this.vy += Math.sin(elapsed * 8 + this.randomOffset * 20) * this.curveStrength * 5;
+            this.vx += Math.cos(elapsed * 6 + this.randomOffset * 15) * this.curveStrength * 3;
+            
+            // 회전
+            this.rotation += this.rotationSpeed;
+            
+            // 투명도 깜빡임 (자연스러운 변화)
+            this.alpha = this.baseAlpha + Math.sin(elapsed * 10 + this.randomOffset * 20) * this.alphaFlicker;
+            
+            // 화면 완전히 벗어날 때까지
+            const reachedEdge = this.direction > 0 ? 
+              this.x > window.innerWidth + 150 : 
+              this.x < -150;
+            
+            if (reachedEdge || elapsed > 0.7) {
+              this.phase = 1;
+              // y 위치를 화면 전체로 재배치
+              this.targetY = Math.random() * window.innerHeight;
+            }
+          } else if (this.phase === 1) {
+            // Phase 1: 화면 밖에서 y 재배치하며 같은 쪽 화면 끝으로 (0.7~1.0초)
+            this.y += (this.targetY - this.y) * 0.2;
+            
+            // 같은 쪽 화면 끝으로 이동
+            const edgeX = this.direction > 0 ? window.innerWidth + 100 : -100;
+            this.x += (edgeX - this.x) * 0.2;
+            
+            if (elapsed > 1.0) {
+              this.phase = 2;
+              this.x = edgeX;
+              this.sweepStartX = this.x;
+            }
+          } else if (this.phase === 2) {
+            // Phase 2: 같은 쪽에서 들어와 반대편으로 이동하며 점진적으로 커짐 (1.0~3초)
+            // x 이동 거리로 진행도 계산
+            const totalDistance = window.innerWidth + 300;
+            const startX = this.sweepStartX;
+            const currentDistance = Math.abs(this.x - startX);
+            const sweepProgress = Math.min(1, currentDistance / totalDistance);
+            
+            // 이동하면서 크기가 점진적으로 커짐
+            const minScale = 0.3 + this.randomOffset * 0.5; // 0.3~0.8
+            const maxScale = 4.5 + this.randomOffset * 4.5; // 4.5~9.0 (1.5배 확대)
+            const scale = minScale + sweepProgress * (maxScale - minScale);
+            this.size = this.baseSize * scale;
+            
+            // 반대편으로 빠르게 이동 (속도도 약간 랜덤)
+            this.vx = -this.direction * (45 + this.randomOffset * 10);
+            this.x += this.vx;
+            
+            // y도 불규칙하게 이동 + shake 효과
+            const shakeX = Math.sin(elapsed * 15 + this.randomOffset * 30) * 2;
+            const shakeY = Math.sin(elapsed * 12 + this.randomOffset * 25) * 3;
+            this.x += shakeX;
+            this.y += shakeY + Math.sin(elapsed * 5 + this.randomOffset * 10) * 4;
+            
+            // 회전 지속
+            this.rotation += this.rotationSpeed * (1 + sweepProgress);
+            
+            // 투명도 변화 (가까워질수록 약간 더 불투명)
+            this.alpha = this.baseAlpha * (0.7 + sweepProgress * 0.3) + 
+                         Math.sin(elapsed * 8 + this.randomOffset * 15) * this.alphaFlicker;
+            
+            // 화면 반대편 벗어나면 사라짐
+            if ((this.direction > 0 && this.x < -200) || 
+                (this.direction < 0 && this.x > window.innerWidth + 200)) {
+              this.phase = 3;
+            }
+          } else if (this.phase === 3) {
+            // Phase 3: 빠르게 사라짐
+            this.alpha -= 0.1;
+          }
+        }
+        
+        draw(ctx) {
+          if (this.alpha > 0 && this.spawned) {
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, Math.min(1, this.alpha));
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            
+            // 약간 불규칙한 모양 (완벽한 원이 아닌)
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            
+            // 타원형으로 그려서 더 자연스럽게
+            const scaleX = 1 + Math.sin(this.randomOffset * 10) * 0.2;
+            const scaleY = 1 + Math.cos(this.randomOffset * 10) * 0.2;
+            ctx.scale(scaleX, scaleY);
+            ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 부드러운 엣지 효과 (약간의 블러)
+            if (this.size > 0.8) {
+              ctx.globalAlpha = Math.max(0, Math.min(1, this.alpha)) * 0.3;
+              ctx.arc(0, 0, this.size * 1.3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            
+            ctx.restore();
+          }
+        }
+        
+        isDead() {
+          return this.alpha <= 0;
+        }
+      }
+
+      // 입자(모래알) 클래스
+      class Particle {
+        constructor(x, y, letterIndex) {
+          // 위치 (처음부터 최종 위치에 생성)
+          this.x = x;
+          this.y = y;
+          this.originalX = x;
+          this.originalY = y;
+          this.letterIndex = letterIndex;
+          this.size = Math.random() * 0.4 + 0.3; // 0.3~0.7 사이의 매우 작은 입자
+          this.color = `hsl(0, 0%, ${Math.random() * 20 + 70}%)`; // 은색으로 변경 (70~90% 밝기)
+          this.velocityX = 0;
+          this.velocityY = 0;
+          this.forming = true; // 형성 중
+          this.dispersing = false;
+          this.disperseDelay = 0; // 흩어지기 전 딜레이
+          this.alpha = 0; // 투명하게 시작
+          this.targetAlpha = 1; // 목표 투명도
+          this.fadeInDelay = Math.random() * 40; // 0~40 프레임 랜덤 딜레이
+          this.fadeInSpeed = Math.random() * 0.02 + 0.015; // 0.015~0.035 랜덤 속도 (더 느리게)
+        }
+
+        update() {
+          if (this.forming) {
+            // 랜덤 딜레이 후 opacity만 서서히 증가
+            if (this.fadeInDelay > 0) {
+              this.fadeInDelay--;
+            } else {
+              this.alpha += this.fadeInSpeed;
+              if (this.alpha >= this.targetAlpha) {
+                this.alpha = this.targetAlpha;
+                this.forming = false;
+              }
+            }
+          } else if (this.dispersing) {
+            // 딜레이가 있으면 대기
+            if (this.disperseDelay > 0) {
+              this.disperseDelay--;
+              return;
+            }
+            
+            // 바람에 날아가는 효과 (더 느리게)
+            this.velocityX += 0.1; // 0.15 -> 0.1
+            this.velocityY += (Math.random() - 0.5) * 0.2; // 0.3 -> 0.2
+            
+            // 바람에 흔들림
+            this.velocityY += Math.sin(Date.now() * 0.01 + this.x) * 0.08; // 0.1 -> 0.08
+            
+            this.x += this.velocityX;
+            this.y += this.velocityY;
+            this.alpha -= 0.008; // 0.012 -> 0.008 (더 천천히 사라짐)
+          }
+        }
+
+        draw() {
+          if (this.alpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            // 파티클에 고유 색상이 있으면 사용, 없으면 배경에 따라 동적 변경
+            const fillColor = this.color || getBackgroundColorAt(this.x, this.y);
+            ctx.fillStyle = fillColor;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        disperse(baseX) {
+          this.forming = false;
+          this.dispersing = true;
+          
+          // 왼쪽 파티클부터 먼저 날아가도록 딜레이 설정 (더 느리게)
+          const relativeX = this.x - baseX;
+          this.disperseDelay = Math.max(0, relativeX * 0.4); // 0.25 -> 0.4로 늘림
+          
+          // 초기 속도도 약간 느리게
+          this.velocityX = Math.random() * 1.5 + 0.8; // 2+1 -> 1.5+0.8
+          this.velocityY = (Math.random() - 0.7) * 1.5; // *2 -> *1.5
+        }
+      }
+
+      // 글자 클래스
+      class Letter {
+        constructor(char, x, y, index, customFontSize = 80, sentenceId = 0) {
+          this.char = char;
+          this.x = x;
+          this.y = y;
+          this.index = index; // 글자 생성 순서
+          this.fontSize = customFontSize; // 커스텀 폰트 크기
+          this.particles = [];
+          this.createdAt = Date.now();
+          this.dispersed = false;
+          this.width = 0; // 글자 너비
+          this.sentenceId = sentenceId; // 문장 ID
+          this.sentenceStartTime = Date.now(); // 이 문장이 시작된 시간
+          
+          this.createParticles();
+        }
+
+        createParticles() {
+          // 임시 캔버스에 글자 그리기
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          const fontSize = this.fontSize;
+          tempCanvas.width = fontSize * 2;
+          tempCanvas.height = fontSize * 2;
+
+          // 아라비안 나이트 느낌의 우아하고 흐르는 듯한 폰트
+          tempCtx.font = `italic bold ${fontSize}px 'Cormorant Garamond', serif`;
+          
+          // 글자 너비 측정
+          const metrics = tempCtx.measureText(this.char);
+          this.width = metrics.width;
+          
+          tempCtx.fillStyle = 'white';
+          tempCtx.textAlign = 'center';
+          tempCtx.textBaseline = 'middle';
+          tempCtx.fillText(this.char, fontSize, fontSize);
+
+          // 픽셀 데이터 가져오기
+          const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+          const pixels = imageData.data;
+
+          // 모래 입자 생성 (픽셀 샘플링 - 더 촘촘하게)
+          const mainParticles = [];
+          for (let y = 0; y < tempCanvas.height; y += 1) {
+            for (let x = 0; x < tempCanvas.width; x += 1) {
+              const index = (y * tempCanvas.width + x) * 4;
+              const alpha = pixels[index + 3];
+              
+              if (alpha > 128) { // 불투명한 픽셀에만 입자 생성
+                // 위치에 약간의 랜덤 오프셋 추가 (더 자연스러운 모래 느낌)
+                const offsetX = (Math.random() - 0.5) * 2;
+                const offsetY = (Math.random() - 0.5) * 2;
+                const px = this.x + x - fontSize + offsetX;
+                const py = this.y + y - fontSize + offsetY;
+                this.particles.push(new Particle(px, py, letters.length));
+                mainParticles.push({ x: px, y: py });
+              }
+            }
+          }
+          
+          // 글자 주변에 추가 랜덤 파티클 생성 (모래가 흩어진 느낌)
+          // 글자 크기에 따라 추가 파티클 비율 조정 (작은 글씨는 적게)
+          const extraParticleRatio = Math.min(0.5, (fontSize / 80) * 0.5);
+          const extraParticleCount = Math.floor(mainParticles.length * extraParticleRatio);
+          
+          for (let i = 0; i < extraParticleCount; i++) {
+            // 기존 파티클 중 랜덤하게 선택
+            const baseParticle = mainParticles[Math.floor(Math.random() * mainParticles.length)];
+            if (baseParticle) {
+              // 주변 3~10픽셀 범위에 랜덤 배치
+              const angle = Math.random() * Math.PI * 2;
+              const distance = Math.random() * 7 + 3;
+              const px = baseParticle.x + Math.cos(angle) * distance;
+              const py = baseParticle.y + Math.sin(angle) * distance;
+              this.particles.push(new Particle(px, py, letters.length));
+            }
+          }
+        }
+
+        update() {
+          // 특별 메시지들은 별도 처리
+          if (this.isWishMessage || this.isIntroMessage || this.isKoreanWarning || this.isTouchHint || this.isClickHint || this.isEnterHint) {
+            this.particles.forEach(p => p.update());
+            return;
+          }
+          
+          // 이 문장의 마지막 입력 시간 찾기 (같은 sentenceId를 가진 글자들 중)
+          const sameSentenceLetters = letters.filter(l => l.sentenceId === this.sentenceId);
+          const sentenceLastInputTime = Math.max(...sameSentenceLetters.map(l => l.createdAt));
+          
+          // 이 문장 기준으로 시간 계산
+          const timeSinceSentenceLastInput = Date.now() - sentenceLastInputTime;
+          const timeSinceCreation = Date.now() - this.createdAt;
+          
+          // 같은 문장 내에서의 인덱스 계산
+          const sentenceIndex = sameSentenceLetters.findIndex(l => l === this);
+          
+          // 기본 대기 시간을 1.5초로 늘리고, 순차 딜레이도 늘림
+          const disperseDelay = 1500 + (Math.pow(sentenceIndex, 0.6) * 150);
+          
+          // 형성이 완료되고(1.5초 경과) + 문장 마지막 입력 + 순차 딜레이 후 흩어짐
+          if (!this.dispersed && timeSinceCreation > 1500 && timeSinceSentenceLastInput > disperseDelay) {
+            this.dispersed = true;
+            
+            // 문장의 마지막 글자일 때 엔터 없이 사라짐 카운터 증가
+            const isLastInSentence = sentenceIndex === sameSentenceLetters.length - 1;
+            if (isLastInSentence) {
+              sentencesWithoutEnter++;
+              console.log(`📝 Sentence dispersed without Enter. Count: ${sentencesWithoutEnter}`);
+              
+              // 3번째 엔터 없이 사라진 문장이면 Enter 힌트 생성
+              if (sentencesWithoutEnter >= 3 && !wishMessage && !enterHintShown) {
+                createEnterHint();
+                sentencesWithoutEnter = 0; // 리셋
+              }
+            }
+            
+            // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록
+            this.particles.forEach(p => p.disperse(this.x));
+          }
+
+          this.particles.forEach(p => p.update());
+        }
+        
+        checkShouldDisperse() {
+          // 형성이 완료되었는지 확인
+          const timeSinceCreation = Date.now() - this.createdAt;
+          return timeSinceCreation > 1000;
+        }
+
+        draw() {
+          this.particles.forEach(p => p.draw());
+        }
+
+        isFinished() {
+          // 모든 입자가 사라졌는지 확인
+          return this.dispersed && this.particles.every(p => p.alpha <= 0);
+        }
+      }
+
+      // 글자들을 저장하는 배열
+      let letters = [];
+      let currentX = window.innerWidth / 2;
+      let currentY = window.innerHeight / 2;
+      let mouseX = window.innerWidth / 2;
+      let mouseY = window.innerHeight / 2;
+      let isTyping = false; // 타이핑 중인지 확인
+      let lastInputTime = Date.now(); // 마지막 입력 시간
+      let currentSentenceId = 0; // 현재 문장 ID (마우스 움직일 때마다 증가)
+
+      // 마우스 위치 추적 (항상 추적)
+      let lastMouseLogTime = 0;
+      let mouseHasMoved = false; // 마우스가 움직였는지 추적
+      let lastMouseX = window.innerWidth / 2;
+      let lastMouseY = window.innerHeight / 2;
+      
+      window.addEventListener('mousemove', function(event) {
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+        
+        // 마우스가 움직였는지 감지 (10픽셀 이상 움직이면)
+        const mouseMoveDistance = Math.sqrt(
+          Math.pow(mouseX - lastMouseX, 2) + Math.pow(mouseY - lastMouseY, 2)
+        );
+        
+        if (mouseMoveDistance > 10) {
+          mouseHasMoved = true;
+          console.log('🖱️ Mouse moved significantly, next typing will start at new position');
+        }
+        
+        lastMouseX = mouseX;
+        lastMouseY = mouseY;
+        
+        // 마우스 위치 1초마다 콘솔 출력
+        const now = Date.now();
+        if (now - lastMouseLogTime > 1000) {
+          console.log('Mouse Position:', { x: mouseX, y: mouseY });
+          lastMouseLogTime = now;
+        }
+      });
+
+      // 마우스 클릭 시 카메라 위치 출력
+      window.addEventListener('click', function(event) {
+        console.log('📸 Camera Position:', {
+          x: camera.position.x.toFixed(2), 
+          y: camera.position.y.toFixed(2), 
+          z: camera.position.z.toFixed(2)
+        });
+        
+        // 첫 클릭 힌트가 이미 표시된 경우 무시
+        if (clickHintShown) {
+          console.log('🚫 Click hint already shown, ignoring click event');
+          return;
+        }
+        
+        // 클릭 힌트 생성 (이전 힌트가 있으면 분산시키고 새로 생성)
+        if (clickHintMessage) {
+          disperseClickHint();
+        }
+        createClickHint();
+      });
+      
+      // 터치 이벤트도 추가 (모바일 대응)
+      window.addEventListener('touchstart', function(event) {
+        // 첫 클릭 힌트가 이미 표시된 경우 무시
+        if (clickHintShown) {
+          console.log('🚫 Click hint already shown, ignoring touch event');
+          return;
+        }
+        
+        // 클릭 힌트 생성 (이전 힌트가 있으면 분산시키고 새로 생성)
+        if (clickHintMessage) {
+          disperseClickHint();
+        }
+        createClickHint();
+      });
+
+      // 한글 입력 감지 함수
+      function isKorean(text) {
+        return /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(text);
+      }
+      
+      // touch 힌트 메시지 생성 함수 (단순 버전)
+      function createTouchHint() {
+        if (touchHintMessage || touchHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        touchHintShown = true; // 표시 플래그 설정
+        console.log('💡 Creating simple touch hint message!');
+        touchHintMessage = [];
+        touchHintStartTime = Date.now();
+        const message = "touch?";
+        
+        // 램프 아래에 위치 (한글 경고 메시지와 같은 위치)
+        const msgY = window.innerHeight * 0.75;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic bold 60px 'Cormorant Garamond', serif`;
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          const spacing = Math.min(Math.max(metrics.width + 6, 30), 45);
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 60, -1); // sentenceId -1 (특별)
+          msgLetter.isTouchHint = true;
+          msgLetter.revealDelay = i * 150; // 150ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 힌트)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x;
+            p.originalY = p.y;
+            // 황금색 파티클
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`;
+          });
+          
+          touchHintMessage.push(msgLetter);
+          const spacing = Math.min(Math.max(msgLetter.width + 6, 30), 45);
+          msgCurrentX += spacing;
+        }
+      }
+      
+      // touch 힌트 메시지 날리기 함수 (일반 글자와 동일한 로직)
+      function disperseTouchHint() {
+        if (!touchHintMessage) return;
+        
+        console.log('🌪️ Dispersing touch hint message!');
+        
+        touchHintMessage.forEach((msgLetter, index) => {
+          if (msgLetter.revealed) {
+            // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+            msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+          }
+        });
+      }
+
+      // Enter 키 힌트 메시지 생성 함수
+      function createEnterHint() {
+        if (enterHintMessage || enterHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        enterHintShown = true; // 표시 플래그 설정
+        console.log('💡 Creating Enter key hint message!');
+        enterHintMessage = [];
+        enterHintStartTime = Date.now();
+        const message = 'type and press "enter" to talk with me';
+        
+        // 램프 아래에 위치 (touch 힌트와 같은 위치)
+        const msgY = window.innerHeight * 0.75;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic bold 50px 'Cormorant Garamond', serif`;
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          const spacing = Math.min(Math.max(metrics.width + 4, 25), 40);
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 50, -3); // sentenceId -3 (특별)
+          msgLetter.isEnterHint = true;
+          msgLetter.revealDelay = i * 80; // 80ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 힌트)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x;
+            p.originalY = p.y;
+            // 황금색 파티클
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`;
+          });
+          
+          enterHintMessage.push(msgLetter);
+          const spacing = Math.min(Math.max(msgLetter.width + 4, 25), 40);
+          msgCurrentX += spacing;
+        }
+      }
+
+      // Enter 힌트 메시지 날리기 함수 (일반 글자와 동일한 로직)
+      function disperseEnterHint() {
+        if (!enterHintMessage) return;
+        
+        console.log('🌪️ Dispersing Enter hint message!');
+        
+        enterHintMessage.forEach((msgLetter, index) => {
+          if (msgLetter.revealed) {
+            // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+            msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+          }
+        });
+      }
+
+      // 클릭 힌트 생성 함수
+      function createClickHint() {
+        if (clickHintMessage || clickHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        clickHintShown = true; // 표시 플래그 설정
+        console.log('💡 Creating click hint message!');
+        clickHintMessage = [];
+        clickHintStartTime = Date.now();
+        const message = "I only recognize keyboard input and mouse position";
+        
+        // 램프 위쪽에 위치 (더 위로)
+        const msgY = window.innerHeight * 0.15;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic 40px 'Cormorant Garamond', serif`;
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          const spacing = Math.min(Math.max(metrics.width + 3, 20), 35);
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 40, -2); // sentenceId -2 (특별)
+          msgLetter.isClickHint = true;
+          msgLetter.revealDelay = i * 100; // 100ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 은색으로 설정 (사용자 색상)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x;
+            p.originalY = p.y;
+            // 황금색 파티클 (지니 색상)
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`;
+          });
+          
+          clickHintMessage.push(msgLetter);
+          const spacing = Math.min(Math.max(msgLetter.width + 3, 20), 35);
+          msgCurrentX += spacing;
+        }
+      }
+
+      // 클릭 힌트 분산 함수 (일반 글자와 동일한 로직)
+      function disperseClickHint() {
+        if (!clickHintMessage) return;
+        
+        console.log('🌪️ Dispersing click hint message!');
+        
+        clickHintMessage.forEach((msgLetter, index) => {
+          if (msgLetter.revealed) {
+            // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+            msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+          }
+        });
+        
+        clickHintMessage = null; // 메시지 제거
+      }
+
+      // 한글 경고 메시지 생성 함수
+      function createKoreanWarningMessage() {
+        if (koreanWarningMessage || koreanHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
+        
+        koreanHintShown = true; // 표시 플래그 설정
+        koreanWarningMessage = [];
+        koreanWarningStartTime = Date.now();
+        const message = "I can't speak Korean...";
+        
+        // 램프 아래에 위치 (램프가 화면 중앙 아래쪽에 있으므로)
+        const msgY = window.innerHeight * 0.75;
+        
+        // 전체 너비 계산 (작은 글씨)
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.font = `italic bold 50px 'Cormorant Garamond', serif`; // 70px -> 50px
+        
+        let totalMsgWidth = 0;
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const metrics = tempCtx.measureText(char);
+          // 자간을 줄임: 기존보다 작게 설정
+          const spacing = char === ' ' ? 18 : Math.min(Math.max(metrics.width + 4, 25), 35); // 25->18, 40->25, 55->35
+          totalMsgWidth += spacing;
+        }
+        
+        // 중앙정렬 시작 위치
+        const msgX = (window.innerWidth - totalMsgWidth) / 2;
+        let msgCurrentX = msgX;
+        
+        for (let i = 0; i < message.length; i++) {
+          const char = message[i];
+          const msgLetter = new Letter(char, msgCurrentX, msgY, i, 50); // 70 -> 50px
+          msgLetter.isKoreanWarning = true;
+          msgLetter.revealDelay = i * 100; // 100ms 간격으로 순차 등장
+          msgLetter.revealed = false;
+          
+          // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 메시지)
+          msgLetter.particles.forEach(p => {
+            p.alpha = 0;
+            p.targetAlpha = 1;
+            p.forming = false;
+            p.originalX = p.x; // 원래 위치 저장 (일렁임용)
+            p.originalY = p.y;
+            // 황금색 파티클로 변경
+            p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
+          });
+          
+          koreanWarningMessage.push(msgLetter);
+          // 동일한 자간 적용
+          const spacing = char === ' ' ? 18 : Math.min(Math.max(msgLetter.width + 4, 25), 35);
+          msgCurrentX += spacing;
+        }
+        
+        console.log('⚠️ Korean warning message created!');
+      }
+
+      // 키보드 입력 처리 (타이핑 + 카메라 회전)
+      document.addEventListener('keydown', function(event) {
+        console.log('Key pressed:', event.key);
+        
+        // 키보드 입력이 있으면 클릭 힌트 분산
+        if (clickHintMessage && event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+          disperseClickHint();
+        }
+
+        // 카메라 회전 (방향키) - 누르고 있으면 계속 회전
+        if (event.key === 'ArrowLeft') {
+          isRotatingLeft = true;
+          return;
+        } else if (event.key === 'ArrowRight') {
+          isRotatingRight = true;
+          return;
+        }
+        
+        // 타이핑 처리
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          
+          // Make your wish 이후: 키워드의 마지막 글자 제거 (화면에도 적용)
+          if (wishMessage && wishInputText.length > 0) {
+            wishInputText = wishInputText.slice(0, -1);
+            console.log('Wish keyword:', wishInputText);
+            // 화면에도 반영되도록 return 제거
+          }
+          
+          // 마지막 글자 제거
+          if (letters.length > 0) {
+            const lastLetter = letters.pop();
+            const spacing = Math.min(Math.max(lastLetter.width + 8, 45), 58);
+            currentX -= spacing;
+            // 현재 텍스트에서도 마지막 글자 제거
+            currentTypedText = currentTypedText.slice(0, -1);
+          }
+          // 모든 글자가 지워지면 타이핑 상태 해제
+          if (letters.length === 0) {
+            isTyping = false;
+            currentTypedText = '';
+          }
+          lastInputTime = Date.now();
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
+          
+          // Enter 키를 눌렀으므로 엔터 없이 사라짐 카운터 리셋
+          sentencesWithoutEnter = 0;
+          
+          // Enter 힌트가 있으면 날리기
+          if (enterHintMessage) {
+            disperseEnterHint();
+          }
+          
+          // touch 상호작용이 활성화되어 있을 때만 처리
+          if (touchInteractionsEnabled) {
+            // 램프 관련 키워드 포함 여부 확인
+            console.log('Enter pressed. Current text:', currentTypedText);
+            const lampKeywords = ['touch', 'rub', 'polish', 'scratch', 'stroke', 'caress', 'pat', 'tap'];
+            const textLower = currentTypedText.toLowerCase();
+            const hasLampKeyword = lampKeywords.some(keyword => textLower.includes(keyword));
+            
+            if (hasLampKeyword) {
+              // 세 번째 touch 이후에는 무시
+              if (touchCount >= 3) {
+                console.log('🚫 Already touched 3 times, ignoring additional touch');
+              } else {
+                touchCount++;
+                console.log('✨ LAMP INTERACTION DETECTED! Count:', touchCount);
+                
+                // 램프 흔들림 시작
+                lampShaking = true;
+                lampShakeStartTime = Date.now();
+                console.log('🪔 Lamp shaking started!');
+                
+                // 세 번째 touch일 때 카메라 회전 시작 (흔들림과 동시에)
+                if (touchCount === 3) {
+                  console.log('📸 Starting camera return to initial position');
+                  isCameraReturning = true;
+                  cameraReturnStartTime = Date.now();
+                  cameraStartAngle = cameraAngle;
+                  cameraTargetAngle = Math.atan2(-4.35, 1.98); // 초기 각도
+                }
+                
+                // touch 힌트 메시지가 있으면 날아가게 함
+                if (touchHintMessage) {
+                  disperseTouchHint();
+                }
+                
+                // touch가 없는 문장 완성 카운터 리셋
+                completedSentences = 0;
+              }
+            } else {
+              // touch가 없는 문장 완성
+              completedSentences++;
+              console.log(`📝 Sentence completed without touch. Count: ${completedSentences}`);
+              
+              // 세 번째 문장이면 힌트 생성 (wishMessage가 없을 때만)
+              if (completedSentences >= 3 && !wishMessage) {
+                createTouchHint();
+                completedSentences = 0; // 리셋
+              }
+            }
+          }
+          
+          // Make your wish 이후: 소원 키워드 처리 (Enter 키로만)
+          if (wishMessage && wishInputText.trim() !== '') {
+            const text = wishInputText.trim().toLowerCase();
+            console.log('🌍 Analyzing wish on Enter:', text);
+            
+            // 텍스트에서 키워드 찾기 (keywords.js에서 불러온 데이터 사용)
+            let detectedKeyword = null;
+            for (const [category, keywords] of Object.entries(keywordMap)) {
+              if (keywords.some(keyword => text.includes(keyword))) {
+                detectedKeyword = category;
+                break;
+              }
+            }
+            
+            if (detectedKeyword && backgroundImages[detectedKeyword]) {
+              const imageUrl = backgroundImages[detectedKeyword];
+              
+              // body 배경 설정
+              document.body.style.backgroundImage = `url('${imageUrl}')`;
+              document.body.style.backgroundSize = 'cover';
+              document.body.style.backgroundPosition = 'center';
+              document.body.style.backgroundRepeat = 'no-repeat';
+              document.body.style.backgroundAttachment = 'fixed';
+              
+              // Three.js 배경 투명하게
+              scene.background = null;
+              renderer.setClearColor(0x000000, 0); // 완전 투명
+              
+              // 바닥 제거
+              if (window.floorMesh) {
+                scene.remove(window.floorMesh);
+              }
+              
+              // 안개 제거
+              scene.fog = null;
+              
+              // 배경 이미지를 숨겨진 canvas에 그려서 픽셀 데이터 읽기
+              currentBackgroundImage = imageUrl;
+              const bgImage = new Image();
+              bgImage.crossOrigin = 'anonymous';
+              bgImage.onload = function() {
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+                bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
+                bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+                console.log('📸 Background image data loaded for particle color adjustment');
+                
+                // 배경 이미지 평균 밝기 계산 및 램프 조명 조정
+                adjustLampLightingBasedOnBackground(bgImageData);
+              };
+              bgImage.onerror = function() {
+                console.warn('⚠️ Failed to load background image for color sampling');
+              };
+              bgImage.src = imageUrl;
+              
+              console.log(`✨ Background changed to: ${detectedKeyword}!`);
+              wishInputText = ''; // 리셋
+            } else {
+              console.log('⚠️ No matching keyword found in wish. Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
+            }
+          }
+          
+          // 줄바꿈 - 마우스 위치 기준으로 새로운 줄 시작
+          isTyping = false;
+          currentX = mouseX;
+          currentY = mouseY;
+          currentTypedText = ''; // 텍스트 리셋
+          lastInputTime = Date.now();
+        } else if (event.key === ' ') {
+          event.preventDefault();
+          
+          // Make your wish 이후: 키워드에 스페이스 추가 (화면에도 표시)
+          if (wishMessage) {
+            wishInputText += ' ';
+            console.log('Wish keyword:', wishInputText);
+            // 글자는 화면에도 표시하도록 return 제거
+          }
+          
+          // 스페이스
+          currentX += 25;
+          currentTypedText += ' ';
+          isTyping = true;
+          lastInputTime = Date.now();
+        } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault();
+          
+          // 한글 입력 감지 - 지니 메시지만 생성하고 글자는 그대로 표시
+          if (isKorean(event.key)) {
+            console.log('🇰🇷 Korean input detected:', event.key);
+            createKoreanWarningMessage();
+            // 한글도 화면에 표시하도록 return 제거
+          }
+          
+          // Make your wish 이후: 키워드 입력 (화면에도 표시)
+          if (wishMessage) {
+            wishInputText += event.key;
+            console.log('Wish keyword:', wishInputText);
+            // 글자는 화면에도 표시
+          }
+          
+          // 새로운 타이핑 시작 조건: 
+          // 1) 타이핑 중이 아니거나 
+          // 2) 마우스가 움직였거나
+          // 3) 마지막 입력으로부터 2초 이상 지났거나
+          // 4) 현재 위치가 화면 끝에 가까우면
+          const timeSinceLastInput = Date.now() - lastInputTime;
+          const shouldStartNewLine = !isTyping || 
+                                   mouseHasMoved ||
+                                   timeSinceLastInput > 2000 || 
+                                   currentX > canvas.width - 100;
+          
+          if (shouldStartNewLine) {
+            currentX = mouseX;
+            currentY = mouseY;
+            mouseHasMoved = false; // 마우스 이동 플래그 리셋
+            currentSentenceId++; // 새로운 문장 ID 할당
+            console.log('🖱️ Starting new typing at mouse position:', { x: mouseX, y: mouseY, sentenceId: currentSentenceId });
+          }
+
+          // 새 글자 생성 (인덱스와 문장 ID 전달)
+          const letter = new Letter(event.key, currentX, currentY, letters.length, 80, currentSentenceId);
+          letters.push(letter);
+          
+          // 현재 타이핑 텍스트에 추가
+          currentTypedText += event.key;
+          
+          // 램프 관련 키워드가 완성되었는지 실시간 체크
+          const lampKeywordsCheck = ['touch', 'rub', 'polish', 'scratch', 'stroke', 'caress', 'pat', 'tap'];
+          const detectedKeyword = lampKeywordsCheck.find(kw => currentTypedText.toLowerCase().includes(kw));
+          if (detectedKeyword) {
+            console.log(`"${detectedKeyword}" detected in text:`, currentTypedText);
+          }
+          
+          // 글자 너비 + 간격(8px), 최소 45px, 최대 58px - 넓은 글자도 적절한 간격
+          const spacing = Math.min(Math.max(letter.width + 8, 45), 58);
+          currentX += spacing;
+          isTyping = true; // 타이핑 상태로 전환
+          lastInputTime = Date.now();
+        }
+      });
+
+      // 키보드 keyup 처리 (회전 멈춤)
+      document.addEventListener('keyup', function(event) {
+        if (event.key === 'ArrowLeft') {
+          isRotatingLeft = false;
+        } else if (event.key === 'ArrowRight') {
+          isRotatingRight = false;
+        }
+      });
+
+      // 애니메이션 루프
+      function animate() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // 투명 배경
+
+        // 일반 글자 업데이트 및 그리기 (맨 아래)
+        letters.forEach(letter => {
+          letter.update();
+          letter.draw();
+        });
+
+        // 사라진 글자 제거
+        letters = letters.filter(letter => !letter.isFinished());
+        
+        // 마지막 입력으로부터 2초 이상 지났으면 타이핑 상태 해제 (글자가 남아있어도)
+        const timeSinceLastInput = Date.now() - lastInputTime;
+        if (timeSinceLastInput > 2000) {
+          isTyping = false;
+        }
+        
+        // 모든 글자가 사라졌으면 타이핑 상태 해제
+        if (letters.length === 0) {
+          isTyping = false;
+        }
+
+        // 중간 메시지 렌더링 ("Wish for a new world...") - 커튼과 함께 드러남
+        if (introMessage && introMessage.length > 0) {
+          const timeSinceExplosion = (Date.now() - explosionStartTime) / 1000;
+          
+          introMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 커튼이 지나간 후 순차적으로 드러남 (오른쪽→왼쪽, 파트별 시차)
+            if (timeSinceExplosion > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              if (index % 10 === 0) { // 매 10번째 글자마다 로그
+                console.log(`✨ Revealing intro part ${msgLetter.introPart} at ${timeSinceExplosion.toFixed(1)}s`);
+              }
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                if (p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // disperseTime에 도달하면 날아감
+            if (timeSinceExplosion > msgLetter.disperseTime && !msgLetter.dispersing) {
+              msgLetter.dispersing = true;
+              msgLetter.particles.forEach(p => {
+                p.dispersing = true;
+                p.velocityX = (Math.random() - 0.5) * 3;
+                p.velocityY = (Math.random() - 0.5) * 3 - 2; // 위로 날아감
+              });
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 사라졌는지 확인
+          const allGone = introMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone && timeSinceExplosion > 9.0) {
+            introMessage = null; // 정리
+          }
+        }
+        
+        // "Make your wish" 메시지 렌더링 (순차적 드러남 + 일렁임) - 중간 레이어
+        if (wishMessage && wishMessage.length > 0) {
+          const timeSinceExplosion = (Date.now() - explosionStartTime) / 1000;
+          
+          wishMessage.forEach((msgLetter, index) => {
+            // update 호출
+            msgLetter.update();
+            
+            // 8.2초 이후 순차적으로 드러남 (introMessage 날아가면서, 살짝 늦게)
+            const revealStartTime = 8.2;
+            const timeSinceRevealStart = timeSinceExplosion - revealStartTime;
+            
+            if (timeSinceRevealStart > msgLetter.revealDelay) {
+              // 드러나기 시작
+              if (!msgLetter.revealed) {
+                msgLetter.revealed = true;
+              }
+              
+              // 파티클 알파 증가 (페이드인)
+              msgLetter.particles.forEach(p => {
+                if (p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 일렁이는 효과 (드러난 글자만)
+            if (msgLetter.revealed) {
+              const waveOffset = Math.sin(Date.now() * 0.002 + index * 0.3) * 5;
+              
+              msgLetter.particles.forEach(p => {
+                p.y = p.originalY + waveOffset;
+              });
+            }
+            
+            msgLetter.draw();
+          });
+        }
+        
+        // 한글 경고 메시지 렌더링 (왼쪽→오른쪽 순차 등장, 유지, 날아가기)
+        if (koreanWarningMessage && koreanWarningMessage.length > 0) {
+          const timeSinceWarning = Date.now() - koreanWarningStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...koreanWarningMessage.map(l => l.revealDelay));
+          
+          koreanWarningMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남 (왼쪽→오른쪽)
+            if (timeSinceWarning > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing Korean warning letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.04; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 3초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 3000;
+            if (timeSinceWarning > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Korean warning letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = koreanWarningMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            koreanWarningMessage = null;
+            console.log('🗑️ Korean warning message cleared');
+          }
+        }
+        
+        // touch 힌트 메시지 렌더링 (한글 힌트와 동일한 로직)
+        if (touchHintMessage && touchHintMessage.length > 0) {
+          const timeSinceHint = Date.now() - touchHintStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...touchHintMessage.map(l => l.revealDelay));
+          
+          touchHintMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남
+            if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing touch hint letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 3초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 3000;
+            if (timeSinceHint > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Touch hint letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = touchHintMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            touchHintMessage = null;
+            console.log('💡 Touch hint message cleared');
+          }
+        }
+        
+        // 클릭 힌트 메시지 렌더링 (한글 힌트와 동일한 로직)
+        if (clickHintMessage && clickHintMessage.length > 0) {
+          const timeSinceHint = Date.now() - clickHintStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...clickHintMessage.map(l => l.revealDelay));
+          
+          clickHintMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남
+            if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing click hint letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 3초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 3000;
+            if (timeSinceHint > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Click hint letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = clickHintMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            clickHintMessage = null;
+            console.log('💡 Click hint message cleared');
+          }
+        }
+        
+        // Enter 힌트 메시지 렌더링 (한글 힌트와 동일한 로직)
+        if (enterHintMessage && enterHintMessage.length > 0) {
+          const timeSinceHint = Date.now() - enterHintStartTime;
+          
+          // 마지막 글자의 revealDelay 계산
+          const lastLetterRevealDelay = Math.max(...enterHintMessage.map(l => l.revealDelay));
+          
+          enterHintMessage.forEach((msgLetter, index) => {
+            msgLetter.update();
+            
+            // 순차적으로 드러남
+            if (timeSinceHint > msgLetter.revealDelay && !msgLetter.revealed) {
+              msgLetter.revealed = true;
+              console.log(`Revealing Enter hint letter ${index}: "${msgLetter.char}"`);
+            }
+            
+            // 드러난 글자 페이드인
+            if (msgLetter.revealed) {
+              msgLetter.particles.forEach(p => {
+                // 날아가지 않는 파티클만 페이드인 적용
+                if (!p.dispersing && p.alpha < p.targetAlpha) {
+                  p.alpha += 0.03; // 빠르게 나타남
+                }
+              });
+            }
+            
+            // 마지막 글자가 드러난 후 3초 후 날아가기 시작
+            const disperseStartTime = lastLetterRevealDelay + 3000;
+            if (timeSinceHint > disperseStartTime && msgLetter.revealed && !msgLetter.dispersed) {
+              msgLetter.dispersed = true;
+              // 글자의 x 위치를 기준으로 왼쪽부터 날아가도록 (일반 글자와 동일)
+              msgLetter.particles.forEach(p => p.disperse(msgLetter.x));
+              console.log(`Enter hint letter ${index} starting to disperse`);
+            }
+            
+            msgLetter.draw();
+          });
+          
+          // 모든 글자가 완전히 사라졌으면 정리
+          const allGone = enterHintMessage.every(letter => 
+            letter.particles.every(p => p.alpha <= 0)
+          );
+          
+          if (allGone) {
+            enterHintMessage = null;
+            console.log('💡 Enter hint message cleared');
+          }
+        }
+
+        // 모래 커튼 애니메이션 (화면 전환 효과) - 맨 위 레이어
+        if (isExploding || explosionParticles.length > 0 || introMessage || wishMessage) {
+          const explosionElapsed = (Date.now() - explosionStartTime) / 1000;
+          
+          // 디버깅: 타이밍 로그 (5초마다)
+          if (Math.floor(explosionElapsed) % 5 === 0 && Math.floor(explosionElapsed * 10) % 50 === 0) {
+            console.log(`⏱️ Time: ${explosionElapsed.toFixed(1)}s, introMessage: ${introMessage ? 'exists' : 'null'}, wishMessage: ${wishMessage ? 'exists' : 'null'}`);
+          }
+          
+          // 주둥이에서 계속 파티클 생성 (처음 1.5초 동안 - 더 길게)
+          if (explosionElapsed < 1.5) {
+            // 고정된 화면 좌표 사용 (주둥이 끝 위치)
+            const spoutX = 469;
+            const spoutY = 325; // 아주 살짝 위로 (329 → 325)
+            
+            // 왼쪽으로 나가도록 고정 (주둥이가 왼쪽을 향함)
+            const direction = -1;
+            
+            // 매 프레임마다 파티클 생성 (2배로!)
+            for (let i = 0; i < 200; i++) {
+              // 주둥이 입구에서 시작 (완전히 한 점에서)
+              const offsetX = 0;
+              const offsetY = 0;
+              const startX = spoutX + offsetX;
+              const startY = spoutY + offsetY;
+              
+              // 매우 짧은 딜레이로 뾰족하게 (삼각형 끝처럼)
+              const spawnDelay = Math.random() * 600; // 0~50ms (매우 짧게)
+              
+              explosionParticles.push(new SandCurtainParticle(startX, startY, direction, spawnDelay));
+            }
+          }
+          
+          // 파티클 업데이트 및 그리기
+          explosionParticles.forEach(p => {
+            p.update();
+            p.draw(ctx);
+          });
+          
+          // 죽은 파티클 제거
+          explosionParticles = explosionParticles.filter(p => !p.isDead());
+          
+          // 0.3초 후 중간 메시지 생성 (커튼과 함께 드러남)
+          if (explosionElapsed > 0.3 && !introMessage && !wishMessage) {
+            console.log('🌟 Creating intro message with curtain!');
+            
+            introMessage = [];
+            
+            // 3개 파트로 나눔 (쉼표 기준)
+            const introParts = [
+              "Wish for a new world",
+              "a thousand new things",
+              "or just a fabulous new look"
+            ];
+            
+            // 램프 아래 중앙에 3줄로 배치 (작은 글씨)
+            const baseY = window.innerHeight * 0.62; // 램프 아래 (더 위로 올림)
+            const lineHeight = 65; // 줄 간격 (조금 더 늘림)
+            
+            introParts.forEach((text, partIndex) => {
+              const y = baseY + lineHeight * partIndex;
+              
+              // 먼저 x=0부터 시작해서 Letter 생성하고 너비 계산
+              let currentX = 0;
+              const partStartX = 0;
+              const partLetters = [];
+              
+              for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                const msgLetter = new Letter(char, currentX, y, i, 55); // 작은 글씨 (55px)
+                msgLetter.isIntroMessage = true;
+                msgLetter.introPart = partIndex;
+                msgLetter.disperseTime = 8.0; // 8초에 모두 날아감
+                msgLetter.revealed = false;
+                
+                // 모든 파티클을 투명하게 시작 + 황금색으로 설정 (지니 메시지)
+                msgLetter.particles.forEach(p => {
+                  p.alpha = 0;
+                  p.targetAlpha = 1;
+                  p.forming = false;
+                  // 황금색 파티클로 변경
+                  p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
+                });
+                
+                partLetters.push(msgLetter);
+                const spacing = char === ' ' ? 22 : Math.min(Math.max(msgLetter.width + 8, 30), 37); // 자간 조금 더 키움
+                currentX += spacing;
+              }
+              
+              // 전체 너비 계산 완료
+              const totalWidth = currentX;
+              
+              // 중앙정렬을 위해 모든 Letter의 x 위치를 오프셋 (살짝 오른쪽으로)
+              const offsetX = (window.innerWidth - totalWidth) / 2 + 30;
+              partLetters.forEach((msgLetter) => {
+                msgLetter.x += offsetX;
+                msgLetter.partStartX = offsetX;
+                // 파티클 위치도 업데이트
+                msgLetter.particles.forEach(p => {
+                  p.x += offsetX;
+                  p.originalX += offsetX;
+                });
+              });
+              
+              // introMessage에 추가
+              introMessage.push(...partLetters);
+              
+              // revealDelay 설정 (왼쪽→오른쪽)
+              partLetters.forEach((msgLetter) => {
+                const relativeX = msgLetter.x - offsetX;
+                const normalizedX = relativeX / totalWidth; // 0(왼쪽)~1(오른쪽)
+                // 파트별로 2초 간격 (2초, 4초, 6초)
+                const partRevealStartTime = 2.0 + partIndex * 2.0;
+                // 왼쪽→오른쪽으로 드러남
+                msgLetter.revealDelay = partRevealStartTime + normalizedX * 0.8;
+              });
+            });
+            
+            console.log('✨ introMessage created (will reveal with curtain sweep)!');
+          }
+          
+          // 8.0초 후 "Make your wish" 메시지 생성 (introMessage가 날아가면서)
+          if (explosionElapsed > 8.0 && introMessage && !wishMessage) {
+            console.log('🌟 Creating "Make your wish" message!');
+            
+            wishMessage = [];
+            const message = "Make your wish";
+            const msgY = window.innerHeight * 0.65;
+            
+            // 먼저 전체 너비 계산
+            const tempCanvas2 = document.createElement('canvas');
+            const tempCtx2 = tempCanvas2.getContext('2d');
+            tempCtx2.font = `italic bold 80px 'Cormorant Garamond', serif`;
+            
+            let totalMsgWidth = 0;
+            for (let i = 0; i < message.length; i++) {
+              const char = message[i];
+              const metrics = tempCtx2.measureText(char);
+              const spacing = char === ' ' ? 25 : Math.min(Math.max(metrics.width + 8, 45), 58);
+              totalMsgWidth += spacing;
+            }
+            
+            // 중앙정렬 시작 위치 (살짝 오른쪽으로)
+            const msgX = (window.innerWidth - totalMsgWidth) / 2 + 50;
+            let msgCurrentX = msgX;
+            
+            for (let i = 0; i < message.length; i++) {
+              const char = message[i];
+              const msgLetter = new Letter(char, msgCurrentX, msgY, i);
+              msgLetter.isWishMessage = true;
+              msgLetter.revealDelay = 0; // 나중에 설정
+              msgLetter.revealed = false;
+              
+              msgLetter.particles.forEach(p => {
+                p.alpha = 0;
+                p.targetAlpha = 1;
+                p.forming = false;
+                // 황금색 파티클로 변경 (지니 메시지)
+                p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
+              });
+              
+              wishMessage.push(msgLetter);
+              const spacing = char === ' ' ? 25 : Math.min(Math.max(msgLetter.width + 8, 45), 58);
+              msgCurrentX += spacing;
+            }
+            
+            // 왼쪽부터 드러나도록 딜레이 설정
+            const totalWidth = msgCurrentX - msgX;
+            wishMessage.forEach((msgLetter) => {
+              const letterX = msgLetter.x;
+              const relativeX = letterX - msgX;
+              const normalizedX = relativeX / totalWidth; // 0(왼쪽)~1(오른쪽)
+              // 왼쪽부터 드러남
+              msgLetter.revealDelay = normalizedX * 0.8;
+            });
+            
+            console.log('✨ wishMessage created!');
+          }
+          
+          // wishMessage가 생성된 후에만 종료
+          if (explosionElapsed > 9.0 && explosionParticles.length === 0 && wishMessage) {
+            if (isExploding) { // 상태가 변경될 때만 로그 출력
+              console.log('🎬 Animation sequence completed!');
+            }
+            isExploding = false;
+          }
+        }
+
+        // 타이핑 중이 아니면 마우스 위치를 따라감
+        if (!isTyping) {
+          currentX = mouseX;
+          currentY = mouseY;
+        }
+
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+
+      // 윈도우 리사이즈
+      window.addEventListener('resize', () => {
+        // Three.js 리사이즈
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // 2D 캔버스 리사이즈
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        
+        // 배경 캔버스 리사이즈
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
+        
+        // 배경 이미지가 있으면 다시 그리기
+        if (currentBackgroundImage) {
+          const bgImage = new Image();
+          bgImage.crossOrigin = 'anonymous';
+          bgImage.onload = function() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
+            bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
+          };
+          bgImage.src = currentBackgroundImage;
+        }
+      });
+    </script>
+  </body>
+</html>

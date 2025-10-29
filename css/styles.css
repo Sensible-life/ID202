@@ -1,0 +1,29 @@
+/* Main Styles */
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: monospace;
+  /* 영어 입력 모드 유도 */
+  ime-mode: disabled;
+  -ms-ime-mode: disabled;
+}
+
+#three-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none; /* 마우스 입력 차단 */
+}
+
+#canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  cursor: text;
+  pointer-events: none; /* 마우스 이벤트는 window에서 받음 */
+}
