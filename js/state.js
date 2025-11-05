@@ -13,6 +13,8 @@ export const state = {
   // Messages
   introMessage: null,
   wishMessage: null,
+  wishMessageCreated: false, // 한 번만 생성되도록 플래그
+  genieResponseMessage: null,
   koreanWarningMessage: null,
   touchHintMessage: null,
   clickHintMessage: null,
@@ -23,6 +25,8 @@ export const state = {
   touchHintStartTime: 0,
   clickHintStartTime: 0,
   enterHintStartTime: 0,
+  genieResponseStartTime: 0,
+  genieResponseLogged: false,
 
   // Explosion effect
   explosionParticles: [],
@@ -32,6 +36,7 @@ export const state = {
   // Sentence tracking
   completedSentences: 0,
   sentencesWithoutEnter: 0,
+  sentencesWithEnter: new Set(), // Enter로 완료된 문장 ID들 추적
 
   // Hint flags
   touchHintShown: false,
@@ -72,12 +77,16 @@ export const state = {
   // Background
   bgImageData: null,
   currentBackgroundImage: null,
+  cachedInputTextColor: null, // 입력 텍스트용 캐시된 색상 (성능 최적화)
 
   // Background transition
   backgroundTransitionParticles: [],
   isTransitioningBackground: false,
   transitionStartTime: 0,
   pendingBackgroundImage: null,
+  pendingGenieResponse: null, // 배경 전환 완료 후 표시할 지니 반응
+  genieResponseCreating: false, // 지니 반응 생성 중 플래그 (중복 방지)
+  wishCount: 0, // 소원을 몇 번 빌었는지 (카운트용)
 
   // Performance monitoring
   lastPerformanceLog: 0
@@ -92,4 +101,7 @@ export function initializeState() {
   state.lastMouseX = window.innerWidth / 2;
   state.lastMouseY = window.innerHeight / 2;
   state.lastInputTime = Date.now();
+  
+  // 초기 배경은 어두우므로 밝은 금색으로 시작
+  state.cachedInputTextColor = 'rgba(255, 215, 100, 0.9)';
 }

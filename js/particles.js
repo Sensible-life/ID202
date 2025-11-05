@@ -20,8 +20,8 @@ export class BackgroundTransitionParticle {
     const lightness = 50 + Math.random() * 20; // 50~70
     this.color = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 
-    // 오른쪽으로 이동 속도
-    this.vx = Math.random() * 15 + 10; // 10~25
+    // 오른쪽으로 이동 속도 (부드럽게)
+    this.vx = Math.random() * 10 + 12; // 12~22
     this.vy = (Math.random() - 0.5) * 2; // 약간의 상하 움직임
 
     // 투명도
@@ -31,9 +31,15 @@ export class BackgroundTransitionParticle {
   }
 
   update() {
-    // 단순히 오른쪽으로 이동
+    // 오른쪽으로 이동 (매우 약한 가속)
+    this.vx += 0.1; // 약간만 가속
     this.x += this.vx;
     this.y += this.vy;
+    
+    // 화면 밖으로 나가면 강제로 사라짐 (메모리 누수 방지)
+    if (this.x > window.innerWidth + 200 || this.y > window.innerHeight + 500 || this.y < -500) {
+      this.alpha = 0;
+    }
   }
 
   draw(ctx) {
@@ -47,7 +53,8 @@ export class BackgroundTransitionParticle {
   }
 
   isDead() {
-    return false; // 절대 죽지 않음 (animation.js에서 위치로 제거)
+    // 화면 오른쪽 끝을 벗어나거나 투명도가 0이면 제거
+    return this.x > window.innerWidth + 50 || this.alpha <= 0;
   }
 }
 
@@ -194,6 +201,12 @@ export class SandCurtainParticle {
         (this.direction < 0 && this.x > window.innerWidth + 200)) {
         this.phase = 3;
       }
+      
+      // 화면 밖으로 너무 멀리 나가면 강제로 사라짐 (메모리 누수 방지)
+      if (this.x > window.innerWidth + 500 || this.x < -500 ||
+          this.y > window.innerHeight + 500 || this.y < -500) {
+        this.alpha = 0;
+      }
     } else if (this.phase === 3) {
       // Phase 3: 빠르게 사라짐
       this.alpha -= 0.1;
@@ -252,8 +265,8 @@ export class Particle {
     this.disperseDelay = 0; // 흩어지기 전 딜레이
     this.alpha = 0; // 투명하게 시작
     this.targetAlpha = 1; // 목표 투명도
-    this.fadeInDelay = Math.random() * 40; // 0~40 프레임 랜덤 딜레이
-    this.fadeInSpeed = Math.random() * 0.02 + 0.015; // 0.015~0.035 랜덤 속도 (더 느리게)
+    this.fadeInDelay = Math.random() * 15; // 0~15 프레임 랜덤 딜레이 (40->15로 빠르게)
+    this.fadeInSpeed = Math.random() * 0.04 + 0.04; // 0.04~0.08 랜덤 속도 (더 빠르게)
     this.getBackgroundColorAt = getBackgroundColorAt; // 배경색 가져오기 함수
   }
 
@@ -286,6 +299,12 @@ export class Particle {
       this.x += this.velocityX;
       this.y += this.velocityY;
       this.alpha -= 0.008; // 0.012 -> 0.008 (더 천천히 사라짐)
+      
+      // 화면 밖으로 많이 벗어나면 강제로 사라짐 (메모리 누수 방지)
+      if (this.x > window.innerWidth + 500 || this.x < -500 ||
+          this.y > window.innerHeight + 500 || this.y < -500) {
+        this.alpha = 0;
+      }
     }
   }
 
@@ -293,8 +312,20 @@ export class Particle {
     if (this.alpha > 0) {
       ctx.save();
       ctx.globalAlpha = this.alpha;
-      // 파티클에 고유 색상이 있으면 사용, 없으면 배경에 따라 동적 변경
+      // 색상이 이미 고정되어 있으면 그대로 사용 (성능 최적화)
+      // 없으면 배경에 따라 동적 변경 (하위 호환성)
       const fillColor = this.color || this.getBackgroundColorAt(this.x, this.y);
+      
+      // 디버깅: 색상이 없어서 매번 계산하는 경우 로그
+      if (!this.color && !this._colorWarningLogged) {
+        console.warn('⚠️ Particle drawing without cached color! This will hurt performance.', {
+          x: this.x,
+          y: this.y,
+          letterIndex: this.letterIndex
+        });
+        this._colorWarningLogged = true;
+      }
+      
       ctx.fillStyle = fillColor;
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);

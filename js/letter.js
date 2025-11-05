@@ -22,6 +22,8 @@ export class Letter {
   }
 
   createParticles() {
+    const startTime = performance.now();
+    
     // 임시 캔버스에 글자 그리기
     const tempCanvas = document.createElement('canvas');
     const tempCtx = tempCanvas.getContext('2d');
@@ -45,7 +47,11 @@ export class Letter {
     const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
     const pixels = imageData.data;
 
-    // 모래 입자 생성 (픽셀 샘플링 - 더 촘촘하게)
+    const particleCreationStart = performance.now();
+    let colorSampleTime = 0;
+    let colorSampleCount = 0;
+
+    // 모래 입자 생성 (픽셀 샘플링)
     const mainParticles = [];
     for (let y = 0; y < tempCanvas.height; y += 1) {
       for (let x = 0; x < tempCanvas.width; x += 1) {
@@ -58,7 +64,17 @@ export class Letter {
           const offsetY = (Math.random() - 0.5) * 2;
           const px = this.x + x - fontSize + offsetX;
           const py = this.y + y - fontSize + offsetY;
-          this.particles.push(new Particle(px, py, this.state.letters.length, this.getBackgroundColorAt));
+          
+          // 생성 시 색상을 미리 가져와서 고정 (성능 최적화)
+          const colorStart = performance.now();
+          const particleColor = this.getBackgroundColorAt(px, py);
+          colorSampleTime += performance.now() - colorStart;
+          colorSampleCount++;
+          
+          const particle = new Particle(px, py, this.state.letters.length, this.getBackgroundColorAt);
+          particle.color = particleColor; // 색상 고정
+          
+          this.particles.push(particle);
           mainParticles.push({ x: px, y: py });
         }
       }
@@ -78,14 +94,34 @@ export class Letter {
         const distance = Math.random() * 7 + 3;
         const px = baseParticle.x + Math.cos(angle) * distance;
         const py = baseParticle.y + Math.sin(angle) * distance;
-        this.particles.push(new Particle(px, py, this.state.letters.length, this.getBackgroundColorAt));
+        
+        // 생성 시 색상을 미리 가져와서 고정 (성능 최적화)
+        const colorStart = performance.now();
+        const particleColor = this.getBackgroundColorAt(px, py);
+        colorSampleTime += performance.now() - colorStart;
+        colorSampleCount++;
+        
+        const particle = new Particle(px, py, this.state.letters.length, this.getBackgroundColorAt);
+        particle.color = particleColor; // 색상 고정
+        
+        this.particles.push(particle);
       }
+    }
+    
+    const totalTime = performance.now() - startTime;
+    if (totalTime > 5) { // 5ms 이상 걸리면 로그
+      console.warn(`⏱️ Letter '${this.char}' creation took ${totalTime.toFixed(2)}ms`, {
+        totalParticles: this.particles.length,
+        colorSampleCount,
+        avgColorSampleTime: (colorSampleTime / colorSampleCount).toFixed(3) + 'ms',
+        totalColorSampleTime: colorSampleTime.toFixed(2) + 'ms'
+      });
     }
   }
 
   update() {
     // 특별 메시지들은 별도 처리
-    if (this.isWishMessage || this.isIntroMessage || this.isKoreanWarning || this.isTouchHint || this.isClickHint || this.isEnterHint) {
+    if (this.isWishMessage || this.isGenieResponse || this.isIntroMessage || this.isKoreanWarning || this.isTouchHint || this.isClickHint || this.isEnterHint) {
       this.particles.forEach(p => p.update());
       return;
     }
@@ -101,23 +137,29 @@ export class Letter {
     // 같은 문장 내에서의 인덱스 계산
     const sentenceIndex = sameSentenceLetters.findIndex(l => l === this);
 
-    // 기본 대기 시간을 1.5초로 늘리고, 순차 딜레이도 늘림
-    const disperseDelay = 1500 + (Math.pow(sentenceIndex, 0.6) * 150);
+    // 기본 대기 시간 (wishMessage 이후에는 더 오래 유지: 3초)
+    const baseDelay = this.state.wishMessage ? 4500 : 1500;
+    const disperseDelay = baseDelay + (Math.pow(sentenceIndex, 0.6) * 150);
 
     // 형성이 완료되고(1.5초 경과) + 문장 마지막 입력 + 순차 딜레이 후 흩어짐
     if (!this.dispersed && timeSinceCreation > 1500 && timeSinceSentenceLastInput > disperseDelay) {
       this.dispersed = true;
 
-      // 문장의 마지막 글자일 때 엔터 없이 사라짐 카운터 증가
+      // 문장의 마지막 글자일 때만 체크
       const isLastInSentence = sentenceIndex === sameSentenceLetters.length - 1;
       if (isLastInSentence) {
-        this.state.sentencesWithoutEnter++;
-        console.log(`📝 Sentence dispersed without Enter. Count: ${this.state.sentencesWithoutEnter}`);
+        // Enter로 완료된 문장이 아닐 때만 카운터 증가
+        if (!this.state.sentencesWithEnter.has(this.sentenceId)) {
+          this.state.sentencesWithoutEnter++;
+          console.log(`📝 Sentence ${this.sentenceId} dispersed without Enter. Count: ${this.state.sentencesWithoutEnter}`);
 
-        // 3번째 엔터 없이 사라진 문장이면 Enter 힌트 생성
-        if (this.state.sentencesWithoutEnter >= 3 && !this.state.wishMessage && !this.state.enterHintShown) {
-          this.createEnterHint();
-          this.state.sentencesWithoutEnter = 0; // 리셋
+          // 3번째 엔터 없이 사라진 문장이면 Enter 힌트 생성
+          if (this.state.sentencesWithoutEnter >= 3 && !this.state.wishMessage && !this.state.enterHintShown) {
+            this.createEnterHint();
+            this.state.sentencesWithoutEnter = 0; // 리셋
+          }
+        } else {
+          console.log(`✅ Sentence ${this.sentenceId} was completed with Enter, not counting`);
         }
       }
 

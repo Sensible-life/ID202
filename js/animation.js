@@ -82,6 +82,168 @@ function createIntroMessage(state, getBackgroundColorAtFunc, createEnterHintFunc
   console.log('✨ introMessage created (will reveal with curtain sweep)!');
 }
 
+// Genie response message 생성 (소원에 대한 반응)
+function createGenieResponseMessage(responseText, state, getBackgroundColorAtFunc, createEnterHintFunc) {
+  console.log('🧞 Creating genie response message:', responseText);
+
+  state.genieResponseMessage = [];
+  const message = responseText;
+  const baseY = window.innerHeight * 0.65; // 첫 줄 위치
+  const lineHeight = 80; // 줄 간격
+  const maxWidth = window.innerWidth * 0.8; // 화면 너비의 80%까지만 사용
+
+  // 먼저 전체 너비 계산하여 줄바꿈 필요 여부 확인
+  const tempCanvas2 = document.createElement('canvas');
+  const tempCtx2 = tempCanvas2.getContext('2d');
+  tempCtx2.font = `italic bold 70px 'Cormorant Garamond', serif`;
+
+  // 단어 단위로 분리하여 줄바꿈 처리
+  const words = message.split(' ');
+  const lines = [];
+  let currentLine = '';
+  let currentLineWidth = 0;
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const testLine = currentLine + (currentLine ? ' ' : '') + word;
+    
+    // 테스트 라인의 너비 계산
+    let testWidth = 0;
+    for (let j = 0; j < testLine.length; j++) {
+      const char = testLine[j];
+      const metrics = tempCtx2.measureText(char);
+      const spacing = char === ' ' ? 22 : Math.min(Math.max(metrics.width + 7, 40), 50);
+      testWidth += spacing;
+    }
+    
+    // maxWidth 초과하면 줄바꿈
+    if (testWidth > maxWidth && currentLine !== '') {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  
+  // 마지막 줄 추가
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  console.log(`📝 Genie response split into ${lines.length} lines:`, lines);
+  
+  // 배경색 샘플링 (메시지가 표시될 위치의 중앙)
+  const sampleX = window.innerWidth / 2;
+  const sampleY = baseY;
+  
+  // 배경색 가져오기 (state.bgImageData 사용)
+  let avgR = 0, avgG = 0, avgB = 0, sampleCount = 0;
+  
+  if (state.bgImageData) {
+    // 메시지 영역 주변을 샘플링 (더 정확한 색상 계산)
+    const sampleRadius = 100;
+    for (let dy = -sampleRadius; dy <= sampleRadius; dy += 20) {
+      for (let dx = -sampleRadius; dx <= sampleRadius; dx += 20) {
+        const px = Math.floor(sampleX + dx);
+        const py = Math.floor(sampleY + dy);
+        
+        if (px >= 0 && px < state.bgImageData.width && py >= 0 && py < state.bgImageData.height) {
+          const index = (py * state.bgImageData.width + px) * 4;
+          avgR += state.bgImageData.data[index];
+          avgG += state.bgImageData.data[index + 1];
+          avgB += state.bgImageData.data[index + 2];
+          sampleCount++;
+        }
+      }
+    }
+    
+    avgR /= sampleCount;
+    avgG /= sampleCount;
+    avgB /= sampleCount;
+    
+    console.log(`🎨 Background color at message position: RGB(${avgR.toFixed(0)}, ${avgG.toFixed(0)}, ${avgB.toFixed(0)})`);
+    
+    // 입력 텍스트용 색상도 캐시 (같은 영역이므로 동일한 색상 사용)
+    const brightness = (avgR * 299 + avgG * 587 + avgB * 114) / 1000;
+    if (brightness > 140) {
+      state.cachedInputTextColor = `rgba(40, 25, 10, ${0.95 + Math.random() * 0.05})`;
+    } else if (brightness > 80) {
+      state.cachedInputTextColor = `rgba(255, 250, 230, ${0.95 + Math.random() * 0.05})`;
+    } else {
+      state.cachedInputTextColor = `rgba(255, 255, 240, ${0.95 + Math.random() * 0.05})`;
+    }
+    console.log(`💾 Cached input text color: ${state.cachedInputTextColor}`);
+  }
+
+  // 각 줄별로 Letter 생성
+  let totalLetterIndex = 0;
+  lines.forEach((line, lineIndex) => {
+    const msgY = baseY + (lineIndex * lineHeight);
+    
+    // 현재 줄의 너비 계산
+    let lineWidth = 0;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const metrics = tempCtx2.measureText(char);
+      const spacing = char === ' ' ? 22 : Math.min(Math.max(metrics.width + 7, 40), 50);
+      lineWidth += spacing;
+    }
+    
+    // 중앙정렬 시작 위치
+    const msgX = (window.innerWidth - lineWidth) / 2 + 50;
+    let msgCurrentX = msgX;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const msgLetter = new Letter(char, msgCurrentX, msgY, totalLetterIndex, 70, 0, state, getBackgroundColorAtFunc, createEnterHintFunc);
+      msgLetter.isGenieResponse = true;
+      msgLetter.revealDelay = 0; // 나중에 설정
+      msgLetter.revealed = false;
+
+      msgLetter.particles.forEach(p => {
+        p.alpha = 0;
+        p.targetAlpha = 1;
+        p.forming = false;
+        p.originalX = p.x;
+        p.originalY = p.y;
+        
+        // 배경색에 따라 대비되는 색상 적용
+        if (state.bgImageData && sampleCount > 0) {
+          const brightness = (avgR * 299 + avgG * 587 + avgB * 114) / 1000;
+          
+          if (brightness > 140) {
+            p.color = `rgba(40, 25, 10, ${0.95 + Math.random() * 0.05})`;
+          } else if (brightness > 80) {
+            p.color = `rgba(255, 250, 230, ${0.95 + Math.random() * 0.05})`;
+          } else {
+            p.color = `rgba(255, 255, 240, ${0.95 + Math.random() * 0.05})`;
+          }
+        } else {
+          p.color = `rgba(255, 255, 240, 0.95)`;
+        }
+      });
+
+      state.genieResponseMessage.push(msgLetter);
+      const spacing = char === ' ' ? 22 : Math.min(Math.max(msgLetter.width + 7, 40), 50);
+      msgCurrentX += spacing;
+      totalLetterIndex++;
+    }
+  });
+
+  // 왼쪽부터 드러나도록 딜레이 설정 (전체 메시지 기준)
+  state.genieResponseMessage.forEach((msgLetter, index) => {
+    const totalLetters = state.genieResponseMessage.length;
+    const normalizedIndex = index / totalLetters;
+    // 왼쪽부터 순차적으로 드러남 (빠르게)
+    msgLetter.revealDelay = normalizedIndex * 0.5;
+  });
+
+  // 지니 반응 시작 시간 기록
+  state.genieResponseStartTime = Date.now();
+
+  console.log('✨ genieResponseMessage created!');
+}
+
 // Wish message 생성
 function createWishMessage(state, getBackgroundColorAtFunc, createEnterHintFunc) {
   console.log('🌟 Creating "Make your wish" message!');
@@ -118,6 +280,8 @@ function createWishMessage(state, getBackgroundColorAtFunc, createEnterHintFunc)
       p.alpha = 0;
       p.targetAlpha = 1;
       p.forming = false;
+      p.originalX = p.x; // 원래 위치 저장 (일렁임용)
+      p.originalY = p.y;
       // 황금색 파티클로 변경 (지니 메시지)
       p.color = `hsl(45, 85%, ${Math.random() * 15 + 60}%)`; // 황금색 (60~75% 밝기)
     });
@@ -140,6 +304,9 @@ function createWishMessage(state, getBackgroundColorAtFunc, createEnterHintFunc)
   console.log('✨ wishMessage created!');
 }
 
+// Export createGenieResponseMessage for external use
+export { createGenieResponseMessage };
+
 // 애니메이션 루프 시작
 export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, createEnterHintFunc) {
   function animate() {
@@ -148,12 +315,36 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
     // 성능 디버깅: 30초마다 현재 상태 출력 (최적화됨)
     const now = Date.now();
     if (!state.lastPerformanceLog || now - state.lastPerformanceLog > 30000) {
+      // 각 Letter의 파티클 개수 계산
+      let totalLetterParticles = 0;
+      state.letters.forEach(letter => {
+        totalLetterParticles += letter.particles.length;
+      });
+      
+      // 메시지들의 파티클 개수 계산
+      let totalMessageParticles = 0;
+      [state.introMessage, state.wishMessage, state.genieResponseMessage,
+       state.koreanWarningMessage, state.touchHintMessage, 
+       state.clickHintMessage, state.enterHintMessage].forEach(msg => {
+        if (msg && msg.length > 0) {
+          msg.forEach(letter => {
+            totalMessageParticles += letter.particles.length;
+          });
+        }
+      });
+      
       console.log('🔍 Performance Check:', {
         letters: state.letters.length,
+        letterParticles: totalLetterParticles,
         explosionParticles: state.explosionParticles.length,
-        messages: (state.introMessage?.length || 0) + (state.wishMessage?.length || 0) +
+        transitionParticles: state.backgroundTransitionParticles.length,
+        messageLetters: (state.introMessage?.length || 0) + (state.wishMessage?.length || 0) +
+                  (state.genieResponseMessage?.length || 0) +
                   (state.koreanWarningMessage?.length || 0) + (state.touchHintMessage?.length || 0) +
-                  (state.clickHintMessage?.length || 0) + (state.enterHintMessage?.length || 0)
+                  (state.clickHintMessage?.length || 0) + (state.enterHintMessage?.length || 0),
+        messageParticles: totalMessageParticles,
+        totalParticles: totalLetterParticles + totalMessageParticles + 
+                       state.explosionParticles.length + state.backgroundTransitionParticles.length
       });
       state.lastPerformanceLog = now;
     }
@@ -230,8 +421,8 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         // update 호출
         msgLetter.update();
 
-        // 9.5초 이후 순차적으로 드러남 (introMessage 날아가면서, 살짝 늦게)
-        const revealStartTime = 9.5;
+        // 9.0초 이후 순차적으로 드러남 (생성 시간과 동일하게)
+        const revealStartTime = 9.0;
         const timeSinceRevealStart = timeSinceExplosion - revealStartTime;
 
         if (timeSinceRevealStart > msgLetter.revealDelay) {
@@ -240,25 +431,36 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
             msgLetter.revealed = true;
           }
 
-          // 파티클 알파 증가 (페이드인)
+          // 파티클 알파 증가 (페이드인) - dispersing 중이 아닐 때만
           msgLetter.particles.forEach(p => {
-            if (p.alpha < p.targetAlpha) {
+            if (!p.dispersing && p.alpha < p.targetAlpha) {
               p.alpha += 0.03; // 빠르게 나타남
             }
           });
         }
 
-        // 일렁이는 효과 (드러난 글자만)
+        // 일렁이는 효과 (드러난 글자만, dispersing 중이 아닐 때만)
         if (msgLetter.revealed) {
           const waveOffset = Math.sin(Date.now() * 0.002 + index * 0.3) * 5;
 
           msgLetter.particles.forEach(p => {
-            p.y = p.originalY + waveOffset;
+            if (!p.dispersing) {
+              p.y = p.originalY + waveOffset;
+            }
           });
         }
 
         msgLetter.draw(ctx);
       });
+
+      // 모든 파티클이 사라졌으면 wishMessage 제거
+      const allGone = state.wishMessage.every(letter =>
+        letter.particles.every(p => p.alpha <= 0)
+      );
+      if (allGone) {
+        console.log('🗑️ wishMessage cleared after dispersing');
+        state.wishMessage = null;
+      }
     }
 
     // 한글 경고 메시지 렌더링 (왼쪽→오른쪽 순차 등장, 유지, 날아가기)
@@ -495,9 +697,10 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         createIntroMessage(state, getBackgroundColorAtFunc, createEnterHintFunc);
       }
 
-      // 9.0초 후 "Make your wish" 메시지 생성 (introMessage가 날아가면서)
-      if (explosionElapsed > 9.0 && state.introMessage && !state.wishMessage) {
+      // 9.0초 후 "Make your wish" 메시지 생성 (introMessage가 날아가면서) - 한 번만
+      if (explosionElapsed > 9.0 && state.introMessage && !state.wishMessageCreated) {
         createWishMessage(state, getBackgroundColorAtFunc, createEnterHintFunc);
+        state.wishMessageCreated = true; // 플래그 설정으로 재생성 방지
       }
 
       // wishMessage가 생성된 후에만 종료
@@ -513,7 +716,7 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
     if (state.isTransitioningBackground) {
       const transitionElapsed = (Date.now() - state.transitionStartTime) / 1000;
 
-      // 파티클 생성 (처음 0.5초 동안만 생성)
+      // 파티클 생성 (처음 0.5초 동안만 생성, 모든 소원에서 표시)
       if (transitionElapsed < 0.5) {
         // 화면을 완전히 덮기 위해 대량 파티클 생성
         for (let i = 0; i < 200; i++) {
@@ -533,9 +736,22 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           p.draw(ctx);
         });
 
+        // 죽은 파티클 제거 (성능 향상)
+        const beforeCount = state.backgroundTransitionParticles.length;
+        state.backgroundTransitionParticles = state.backgroundTransitionParticles.filter(p => !p.isDead());
+        const afterCount = state.backgroundTransitionParticles.length;
+        
+        if (beforeCount !== afterCount) {
+          console.log(`🗑️ Transition particles cleaned: ${beforeCount} → ${afterCount}`);
+        }
+
         // 파티클의 선두(오른쪽 끝)와 후미(왼쪽 끝) 위치 계산
-        const frontX = Math.max(...state.backgroundTransitionParticles.map(p => p.x), 0);
-        const backX = Math.min(...state.backgroundTransitionParticles.map(p => p.x), 0);
+        const frontX = state.backgroundTransitionParticles.length > 0 
+          ? Math.max(...state.backgroundTransitionParticles.map(p => p.x), 0) 
+          : 0;
+        const backX = state.backgroundTransitionParticles.length > 0 
+          ? Math.min(...state.backgroundTransitionParticles.map(p => p.x), 0) 
+          : 0;
 
         const progress = Math.min(Math.max(frontX / canvas.width, 0), 1);
 
@@ -547,18 +763,18 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
           overlay.style.clipPath = `inset(0 ${100 - revealPercent}% 0 0)`;
         }
 
-        // 파티클의 후미(가장 왼쪽)가 화면을 완전히 벗어났는지 확인
-        const allParticlesPassedScreen = backX > canvas.width + 100;
-
-        if (allParticlesPassedScreen) {
-          console.log('✅ All particles have passed the screen, clearing particles');
-          state.backgroundTransitionParticles = [];
+        // 지니 반응 메시지를 배경 전환보다 1초 먼저 생성 (파티클 중간에)
+        if (state.pendingGenieResponse && !state.genieResponseCreating && transitionElapsed > 2.0) {
+          console.log('🧞 Creating genie response DURING transition (1s early):', state.pendingGenieResponse);
+          state.genieResponseCreating = true; // 중복 생성 방지
+          createGenieResponseMessage(state.pendingGenieResponse, state, getBackgroundColorAtFunc, createEnterHintFunc);
+          state.pendingGenieResponse = null;
         }
       }
 
-      // 전환 완료 (모든 파티클이 화면을 완전히 벗어남 OR 5초 타임아웃)
-      const shouldComplete = (state.backgroundTransitionParticles.length === 0 && transitionElapsed > 1.0) ||
-                              transitionElapsed > 5.0;
+      // 전환 완료 조건 - 파티클이 모두 사라질 때까지 기다림
+      const shouldComplete = 
+        state.backgroundTransitionParticles.length === 0 && transitionElapsed > 2.0;
 
       if (shouldComplete) {
         console.log('✅ Background transition complete at', transitionElapsed.toFixed(2), 's');
@@ -580,6 +796,62 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         state.isTransitioningBackground = false;
         state.backgroundTransitionParticles = [];
         state.pendingBackgroundImage = null;
+        state.genieResponseCreating = false; // 다음 전환을 위해 리셋
+      }
+    }
+
+    // Genie response 메시지 렌더링 (배경 전환 파티클 위에 그리기)
+    // Make your wish를 대체하는 메시지이므로 새로운 소원이 입력될 때까지 계속 유지됨
+    if (state.genieResponseMessage && state.genieResponseMessage.length > 0) {
+      const timeSinceResponse = (Date.now() - state.genieResponseStartTime) / 1000;
+
+      // 디버깅: 첫 프레임에만 로그
+      if (!state.genieResponseLogged) {
+        console.log('🎨 Rendering genieResponseMessage, letters:', state.genieResponseMessage.length, 'time:', timeSinceResponse.toFixed(2));
+        state.genieResponseLogged = true;
+      }
+
+      state.genieResponseMessage.forEach((msgLetter, index) => {
+        msgLetter.update();
+
+        // 즉시 순차적으로 드러남
+        if (timeSinceResponse > msgLetter.revealDelay) {
+          if (!msgLetter.revealed) {
+            msgLetter.revealed = true;
+          }
+
+          // 파티클 알파 증가 (페이드인) - dispersing 중이 아닐 때만
+          msgLetter.particles.forEach(p => {
+            if (!p.dispersing && p.alpha < p.targetAlpha) {
+              p.alpha += 0.04; // 빠르게 나타남
+            }
+          });
+        }
+
+        // 일렁이는 효과 (드러난 글자만, dispersing 중이 아닐 때만)
+        // wishMessage와 동일하게 계속 일렁이며 유지됨
+        if (msgLetter.revealed && !msgLetter.dispersing) {
+          const waveOffset = Math.sin(Date.now() * 0.002 + index * 0.3) * 5;
+
+          msgLetter.particles.forEach(p => {
+            if (!p.dispersing) {
+              p.y = p.originalY + waveOffset;
+            }
+          });
+        }
+
+        msgLetter.draw(ctx);
+      });
+
+      // dispersing 시작 후 모든 파티클이 사라졌을 때만 제거 (background.js에서 처리)
+      const allGone = state.genieResponseMessage.every(letter =>
+        letter.dispersing && letter.particles.every(p => p.alpha <= 0)
+      );
+      
+      if (allGone) {
+        console.log('🗑️ genieResponseMessage cleared after dispersing');
+        state.genieResponseMessage = null;
+        state.genieResponseLogged = false; // 다음 메시지를 위해 리셋
       }
     }
 

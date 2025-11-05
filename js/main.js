@@ -38,6 +38,9 @@ const { bgCanvas, bgCtx } = initBackgroundCanvas();
 // Three.js 씬 설정
 const threeScene = setupThreeScene(state);
 
+// threeScene을 state에 저장 (다른 모듈에서 접근 가능하도록)
+state.threeScene = threeScene;
+
 // 입력 핸들러 설정
 setupInputHandlers(state, threeScene, canvas);
 

@@ -2,7 +2,7 @@
 export function setupThreeScene(state) {
   // Three.js 3D 씬 설정
   const scene = new THREE.Scene();
-  const floorColor = 0x1a1a1a; // 약간 밝은 검은색
+  const floorColor = 0x2c2c2c; // 회색 배경 (body 배경과 동일)
   scene.background = new THREE.Color(floorColor); // 배경과 바닥 색상 통일
   scene.fog = new THREE.Fog(floorColor, 20, 100); // 안개 효과로 무한 느낌
 
@@ -161,6 +161,7 @@ export function setupThreeScene(state) {
             console.log('🌪️ Starting sand storm!');
             state.isExploding = true;
             state.explosionStartTime = Date.now();
+            console.log('💥 Explosion started at:', new Date().toLocaleTimeString());
             // 화면 전환 시작으로 touch 상호작용 비활성화
             state.touchInteractionsEnabled = false;
             console.log('🚫 Touch interactions disabled due to screen transition');

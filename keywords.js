@@ -42,10 +42,31 @@ const keywordMap = {
   
   // 도시/건축
   'city': ['city', 'urban', 'building', 'street', 'downtown', 'metropolis', 'skyline'],
-  'tokyo': ['tokyo', 'shibuya', 'shinjuku', 'japan'],
+  'tokyo': ['tokyo', 'shibuya', 'shinjuku', 'japan', 'japanese'],
   'paris': ['paris', 'eiffel', 'france', 'french'],
-  'newyork': ['new york', 'nyc', 'manhattan', 'brooklyn'],
-  'london': ['london', 'uk', 'england', 'british'],
+  'newyork': ['new york', 'nyc', 'manhattan', 'brooklyn', 'america', 'usa'],
+  'london': ['london', 'uk', 'england', 'british', 'britain'],
+  'dubai': ['dubai', 'uae', 'emirates', 'burj khalifa'],
+  'rome': ['rome', 'italy', 'italian', 'colosseum', 'vatican'],
+  'barcelona': ['barcelona', 'spain', 'spanish', 'sagrada familia'],
+  'amsterdam': ['amsterdam', 'netherlands', 'dutch', 'holland'],
+  'seoul': ['seoul', 'korea', 'korean', 'gangnam', 'hanok'],
+  'singapore': ['singapore', 'marina bay', 'singaporean'],
+  'sydney': ['sydney', 'australia', 'australian', 'opera house'],
+  'hongkong': ['hong kong', 'hk', 'hongkong', 'victoria harbour'],
+  'bangkok': ['bangkok', 'thailand', 'thai'],
+  'istanbul': ['istanbul', 'turkey', 'turkish', 'bosphorus'],
+  'santorini': ['santorini', 'greece', 'greek', 'mykonos'],
+  'bali': ['bali', 'indonesia', 'indonesian', 'ubud'],
+  'maldives': ['maldives', 'maldive', 'resort island'],
+  'hawaii': ['hawaii', 'honolulu', 'waikiki', 'aloha', 'maui'],
+  'iceland': ['iceland', 'reykjavik', 'icelandic'],
+  'switzerland': ['switzerland', 'swiss', 'alps', 'zurich', 'geneva'],
+  'norway': ['norway', 'norwegian', 'oslo', 'fjord'],
+  'egypt': ['egypt', 'egyptian', 'cairo', 'nile'],
+  'morocco': ['morocco', 'moroccan', 'marrakech', 'casablanca'],
+  'peru': ['peru', 'peruvian', 'machu picchu', 'lima'],
+  'brazil': ['brazil', 'brazilian', 'rio', 'amazon'],
   'castle': ['castle', 'fortress', 'palace', 'medieval', 'kingdom'],
   'temple': ['temple', 'shrine', 'pagoda', 'monastery', 'church', 'cathedral'],
   'bridge': ['bridge', 'suspension', 'crossing'],
@@ -178,6 +199,200 @@ const keywordMap = {
   // 특별한 소원
 };
 
+// 지니 반응 메시지 맵 (소원 카테고리별)
+const genieResponses = {
+  // 부/돈/재산
+  'wealth': "May your pockets never be empty and your treasures multiply",
+  'success': "Your path to triumph is now illuminated",
+  'business': "May your ventures prosper beyond measure",
+
+  // 사랑/연애/관계
+  'love': "May your heart find its true companion",
+  'marriage': "A lifetime of joy awaits you both",
+  'friendship': "True bonds shall strengthen with time",
+  'family': "May your loved ones always be blessed",
+
+  // 건강/웰빙
+  'health': "Vitality and strength shall be yours",
+  'healing': "May wellness restore what was lost",
+  'longevity': "A long and vibrant life is yours",
+  'beauty': "Your radiance shall never fade",
+
+  // 행복/감정
+  'happiness': "Joy shall follow wherever you go",
+  'hope': "Bright horizons await your journey",
+  'freedom': "Unchain yourself and soar high",
+  'peace': "Tranquility shall embrace your days",
+
+  // 지식/능력/재능
+  'wisdom': "Knowledge beyond measure awaits you",
+  'talent': "Your gifts shall shine brilliantly",
+  'power': "Strength flows through you now",
+  'creativity': "Inspiration shall never leave your side",
+
+  // 명예/인기
+  'fame': "The world shall know your name",
+  'respect': "Honor and esteem shall be yours",
+
+  // 모험/경험
+  'adventure': "Grand journeys await your feet",
+  'experience': "Unforgettable moments shall be yours",
+
+  // 목표/꿈
+  'future': "Tomorrow shines brighter than today",
+
+  // 여행지/장소 (새로 추가된 것들)
+  'tokyo': "The rising sun welcomes you",
+  'paris': "The city of lights awaits",
+  'newyork': "Dreams come alive in the city that never sleeps",
+  'london': "History and elegance welcome you",
+  'dubai': "Modern wonders await your arrival",
+  'rome': "Ancient glory calls your name",
+  'barcelona': "Art and passion await you",
+  'amsterdam': "Canals of beauty welcome you",
+  'seoul': "Dynamic energy surrounds you",
+  'singapore': "Prosperity and modernity greet you",
+  'sydney': "The southern star shines for you",
+  'hongkong': "East meets West in your honor",
+  'bangkok': "Golden temples bless your journey",
+  'istanbul': "Two continents unite for you",
+  'santorini': "Azure dreams become reality",
+  'bali': "Paradise on earth awaits",
+  'maldives': "Crystal waters embrace you",
+  'hawaii': "Aloha spirit welcomes you",
+  'iceland': "Northern wonders reveal themselves",
+  'switzerland': "Alpine majesty awaits",
+  'norway': "Fjords of beauty call your name",
+  'egypt': "Ancient mysteries unfold for you",
+  'morocco': "Exotic wonders await discovery",
+  'peru': "Mountain kingdoms welcome you",
+  'brazil': "Vibrant rhythms celebrate you",
+
+  // 자연/장소 - 물
+  'ocean': "The vast sea opens its arms",
+  'lake': "Serene waters reflect your soul",
+  'river': "Flowing currents guide your path",
+  'underwater': "Depths of wonder await discovery",
+
+  // 자연/장소 - 육지
+  'forest': "Nature's embrace awaits",
+  'mountain': "Peaks of grandeur call you",
+  'desert': "Endless horizons stretch before you",
+  'volcano': "Fiery passion ignites within",
+  'cave': "Hidden mysteries reveal themselves",
+  'canyon': "Vast beauty surrounds your journey",
+  'island': "Paradise welcomes your arrival",
+
+  // 자연/장소 - 하늘/날씨
+  'sky': "Limitless possibilities above you",
+  'sunset': "Golden moments paint your path",
+  'sunrise': "New beginnings illuminate your way",
+  'night': "Stars guide your dreams tonight",
+  'aurora': "Dancing lights celebrate you",
+  'storm': "Power and renewal approach",
+  'fog': "Mystery cloaks your adventure",
+  'rainbow': "Colors of hope shine for you",
+
+  // 우주/공간
+  'space': "The cosmos reveals its secrets",
+  'moon': "Lunar magic blesses your night",
+  'planet': "Worlds beyond await exploration",
+
+  // 계절
+  'spring': "Renewal blooms in your life",
+  'summer': "Warmth and joy surround you",
+  'autumn': "Rich harvests bless your days",
+  'winter': "Pure beauty crystallizes around you",
+
+  // 도시/건축
+  'city': "Urban energy pulses for you",
+  'castle': "Regal splendor awaits your reign",
+  'temple': "Sacred peace embraces you",
+  'bridge': "Connections strengthen your journey",
+  'tower': "Heights of achievement call you",
+  'pyramid': "Ancient wisdom is yours",
+  'lighthouse': "Guiding light shows the way",
+
+  // 장소/공간
+  'house': "Comfort and warmth welcome you home",
+  'library': "Endless knowledge awaits discovery",
+  'cafe': "Cozy moments fill your days",
+  'restaurant': "Delightful experiences await",
+  'hotel': "Luxury and rest are yours",
+  'office': "Productivity and success flow freely",
+  'studio': "Creative expression flourishes here",
+
+  // 자연물/식물
+  'garden': "Beauty blossoms around you",
+  'field': "Open spaces invite your freedom",
+  'bamboo': "Resilience and grace are yours",
+  'lavender': "Peace and calm surround you",
+  'rose': "Love and beauty bloom for you",
+  'sunflower': "Brightness follows your path",
+
+  // 동물
+  'cat': "Grace and independence guide you",
+  'dog': "Loyalty and joy accompany you",
+  'bird': "Freedom lifts your spirit high",
+  'butterfly': "Transformation beautifies your life",
+  'whale': "Deep wisdom flows through you",
+  'horse': "Strength and freedom are yours",
+
+  // 색상 테마
+  'pink': "Gentle beauty colors your world",
+  'purple': "Royalty and magic surround you",
+  'blue': "Serenity flows through your days",
+  'green': "Growth and vitality flourish",
+  'red': "Passion ignites your journey",
+  'gold': "Precious moments await you",
+  'black': "Elegance and mystery are yours",
+  'white': "Purity illuminates your path",
+
+  // 추상/분위기
+  'dream': "Fantasies manifest into reality",
+  'magic': "Wonder enchants every moment",
+  'mystery': "Secrets unfold before you",
+  'fire': "Fierce energy burns within",
+  'water': "Fluid grace carries you forward",
+  'light': "Radiance illuminates your way",
+  'shadow': "Hidden depths reveal treasures",
+
+  // 음식/음료
+  'coffee': "Energy and warmth embrace you",
+  'tea': "Peaceful moments await brewing",
+  'wine': "Rich experiences flow freely",
+  'cake': "Sweetness fills your celebrations",
+  'fruit': "Fresh abundance nourishes you",
+
+  // 활동/취미
+  'travel': "Endless adventures call your name",
+  'camping': "Nature's wonders surround you",
+  'music': "Harmonious melodies fill your life",
+  'art': "Creative beauty flows through you",
+  'photography': "Beautiful moments capture forever",
+  'sport': "Strength and victory are yours",
+  'game': "Joyful play brings delight",
+
+  // 교통수단
+  'train': "Journeys of discovery await",
+  'plane': "Soaring heights lift your dreams",
+  'car': "Open roads beckon your spirit",
+  'boat': "Smooth sailing guides your way",
+
+  // 시간대
+  'morning': "Fresh starts brighten each dawn",
+  'afternoon': "Warm moments fill your day",
+  'evening': "Peaceful twilight embraces you",
+
+  // 특별한 장소
+  'beach': "Waves of joy wash over you",
+  'pool': "Refreshing clarity awaits you",
+  'park': "Natural harmony surrounds you",
+  'mall': "Abundance flows to you freely",
+  'museum': "Treasures of wonder await discovery",
+  'zoo': "Wild joy celebrates with you"
+};
+
 // 배경 이미지 URL 맵 (모든 카테고리에 대응)
 const backgroundImages = {
   // 자연 - 물
@@ -222,6 +437,27 @@ const backgroundImages = {
   'paris': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=1920&h=1080&fit=crop',
   'newyork': 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=1920&h=1080&fit=crop',
   'london': 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1920&h=1080&fit=crop',
+  'dubai': 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1920&h=1080&fit=crop',
+  'rome': 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=1920&h=1080&fit=crop',
+  'barcelona': 'https://images.unsplash.com/photo-1562883676-8c7feb83f09b?w=1920&h=1080&fit=crop',
+  'amsterdam': 'https://images.unsplash.com/photo-1534351590666-13e3e96b5017?w=1920&h=1080&fit=crop',
+  'seoul': 'https://images.unsplash.com/photo-1549693578-d683be217e58?w=1920&h=1080&fit=crop',
+  'singapore': 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=1920&h=1080&fit=crop',
+  'sydney': 'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=1920&h=1080&fit=crop',
+  'hongkong': 'https://images.unsplash.com/photo-1536599424071-63c5c47e4a28?w=1920&h=1080&fit=crop',
+  'bangkok': 'https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=1920&h=1080&fit=crop',
+  'istanbul': 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=1920&h=1080&fit=crop',
+  'santorini': 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=1920&h=1080&fit=crop',
+  'bali': 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1920&h=1080&fit=crop',
+  'maldives': 'https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1920&h=1080&fit=crop',
+  'hawaii': 'https://images.unsplash.com/photo-1542259009477-d625272157b7?w=1920&h=1080&fit=crop',
+  'iceland': 'https://images.unsplash.com/photo-1504829857797-ddff29c27927?w=1920&h=1080&fit=crop',
+  'switzerland': 'https://images.unsplash.com/photo-1527004013197-933c4bb611b3?w=1920&h=1080&fit=crop',
+  'norway': 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1920&h=1080&fit=crop',
+  'egypt': 'https://images.unsplash.com/photo-1568322445389-f64ac2515020?w=1920&h=1080&fit=crop',
+  'morocco': 'https://images.unsplash.com/photo-1489749798305-4fea3ae63d43?w=1920&h=1080&fit=crop',
+  'peru': 'https://images.unsplash.com/photo-1526392060635-9d6019884377?w=1920&h=1080&fit=crop',
+  'brazil': 'https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=1920&h=1080&fit=crop',
   'castle': 'https://images.unsplash.com/photo-1467269204594-9661b134dd2b?w=1920&h=1080&fit=crop',
   'temple': 'https://images.unsplash.com/photo-1548013146-72479768bada?w=1920&h=1080&fit=crop',
   'bridge': 'https://images.unsplash.com/photo-1504898770365-14faca6a7320?w=1920&h=1080&fit=crop',

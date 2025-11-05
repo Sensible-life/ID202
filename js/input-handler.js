@@ -4,8 +4,8 @@ import { isKorean } from './utils.js';
 import { createKoreanWarningMessage, createTouchHint, createEnterHint } from './hint-system.js';
 import { changeBackground, getBackgroundColorAt } from './background.js';
 
-// keywordMap과 backgroundImages는 keywords.js에서 전역 변수로 로드됨
-/* global keywordMap, backgroundImages */
+// keywordMap, backgroundImages, genieResponses는 keywords.js에서 전역 변수로 로드됨
+/* global keywordMap, backgroundImages, genieResponses */
 
 export function setupInputHandlers(state, threeScene, canvas) {
   const { scene, cameraAngle, updateCameraAngle } = threeScene;
@@ -94,7 +94,7 @@ export function setupInputHandlers(state, threeScene, canvas) {
       event.preventDefault();
 
       // Make your wish 이후: 키워드의 마지막 글자 제거 (화면에도 적용)
-      if (state.wishMessage && state.wishInputText.length > 0) {
+      if ((state.wishMessage || state.genieResponseMessage) && state.wishInputText.length > 0) {
         state.wishInputText = state.wishInputText.slice(0, -1);
         console.log('Wish keyword:', state.wishInputText);
         // 화면에도 반영되도록 return 제거
@@ -112,10 +112,19 @@ export function setupInputHandlers(state, threeScene, canvas) {
       if (state.letters.length === 0) {
         state.isTyping = false;
         state.currentTypedText = '';
+        state.wishInputText = ''; // 소원 키워드도 리셋
       }
       state.lastInputTime = Date.now();
     } else if (event.key === 'Enter') {
       event.preventDefault();
+
+      // 현재 타이핑 중인 문장 ID 기록 (Enter로 완료됨) - 글자가 지워지기 전에 먼저 기록
+      // currentSentenceId는 다음 문장을 위한 ID이므로 현재 문장은 currentSentenceId - 1
+      if (state.currentSentenceId > 0) {
+        const completedSentenceId = state.currentSentenceId;
+        state.sentencesWithEnter.add(completedSentenceId);
+        console.log(`✅ Sentence ${completedSentenceId} completed with Enter`);
+      }
 
       // Enter 키를 눌렀으므로 엔터 없이 사라짐 카운터 리셋
       state.sentencesWithoutEnter = 0;
@@ -172,7 +181,25 @@ export function setupInputHandlers(state, threeScene, canvas) {
       }
 
       // Make your wish 이후: 소원 키워드 처리 (Enter 키로만)
-      if (state.wishMessage && state.wishInputText.trim() !== '') {
+      // wishMessage, genieResponseMessage가 있거나 배경 전환 중일 때 소원을 빌 수 있음
+      const canMakeWish = state.touchCount >= 3 && state.wishInputText.trim() !== '' && 
+          (state.wishMessage || state.genieResponseMessage || state.isTransitioningBackground);
+      
+      if (state.touchCount >= 3) {
+        console.log('🔍 Wish check:', {
+          touchCount: state.touchCount,
+          wishInput: state.wishInputText,
+          wishInputLength: state.wishInputText.length,
+          hasWishMessage: !!state.wishMessage,
+          wishMessageCount: state.wishMessage?.length || 0,
+          hasGenieResponse: !!state.genieResponseMessage,
+          genieResponseCount: state.genieResponseMessage?.length || 0,
+          isTransitioning: state.isTransitioningBackground,
+          canMakeWish: canMakeWish
+        });
+      }
+      
+      if (canMakeWish) {
         const text = state.wishInputText.trim().toLowerCase();
         console.log('🌍 Analyzing wish on Enter:', text);
 
@@ -187,6 +214,23 @@ export function setupInputHandlers(state, threeScene, canvas) {
 
         if (detectedKeyword && backgroundImages[detectedKeyword]) {
           const imageUrl = backgroundImages[detectedKeyword];
+          console.log('✅ Detected keyword:', detectedKeyword);
+
+          // 지니 반응 메시지 준비 (배경 전환 완료 후 표시하기 위해 저장만 함)
+          if (typeof genieResponses !== 'undefined' && genieResponses[detectedKeyword]) {
+            const responseText = genieResponses[detectedKeyword];
+            console.log('🧞 Genie response prepared:', responseText);
+            state.pendingGenieResponse = responseText; // 배경 전환 완료 후 생성
+          } else {
+            console.log('⚠️ No genie response for keyword:', detectedKeyword);
+            state.pendingGenieResponse = null;
+          }
+
+          // 소원 카운트 증가 (첫 소원까지만 파티클 표시)
+          state.wishCount++;
+          console.log(`🌟 Wish count: ${state.wishCount}`);
+
+          // 배경 전환 시작
           changeBackground(imageUrl, state, threeScene);
           state.wishInputText = ''; // 리셋
         } else {
@@ -199,12 +243,13 @@ export function setupInputHandlers(state, threeScene, canvas) {
       state.currentX = state.mouseX;
       state.currentY = state.mouseY;
       state.currentTypedText = ''; // 텍스트 리셋
+      state.wishInputText = ''; // 소원 키워드도 리셋
       state.lastInputTime = Date.now();
     } else if (event.key === ' ') {
       event.preventDefault();
 
       // Make your wish 이후: 키워드에 스페이스 추가 (화면에도 표시)
-      if (state.wishMessage) {
+      if (state.wishMessage || state.genieResponseMessage) {
         state.wishInputText += ' ';
         console.log('Wish keyword:', state.wishInputText);
         // 글자는 화면에도 표시하도록 return 제거
@@ -244,14 +289,14 @@ export function setupInputHandlers(state, threeScene, canvas) {
         console.log('🖱️ Starting new typing at mouse position:', { x: state.mouseX, y: state.mouseY, sentenceId: state.currentSentenceId });
 
         // 새로운 줄 시작 시 wishInputText도 리셋 (엔터 없이 날아간 문장은 무시)
-        if (state.wishMessage) {
+        if (state.wishMessage || state.genieResponseMessage) {
           console.log('🗑️ Clearing wish input text (new line started without Enter):', state.wishInputText);
           state.wishInputText = '';
         }
       }
 
       // Make your wish 이후: 키워드 입력 (화면에도 표시) - shouldStartNewLine 이후에 추가
-      if (state.wishMessage) {
+      if (state.wishMessage || state.genieResponseMessage) {
         state.wishInputText += event.key;
         console.log('Wish keyword:', state.wishInputText);
         // 글자는 화면에도 표시

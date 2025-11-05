@@ -15,6 +15,24 @@ export function getContrastColor(r, g, b) {
   }
 }
 
+// 지니 메시지용 고대비 색상 계산 함수 (더 뺵뺵하게)
+export function getGenieMessageColor(r, g, b) {
+  // 명도 계산 (0~255)
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+  // 더 극명한 대비를 위해
+  if (brightness > 140) {
+    // 밝은 배경 -> 진한 검은색에 가까운 갈색 (높은 불투명도)
+    return `rgba(40, 25, 10, ${0.95 + Math.random() * 0.05})`;
+  } else if (brightness > 80) {
+    // 중간 밝기 배경 -> 밝은 흰색에 가까운 금색
+    return `rgba(255, 250, 230, ${0.95 + Math.random() * 0.05})`;
+  } else {
+    // 어두운 배경 -> 매우 밝은 흰색 금색 (높은 불투명도)
+    return `rgba(255, 255, 240, ${0.95 + Math.random() * 0.05})`;
+  }
+}
+
 // 배경 이미지 밝기 분석 및 램프 조명 조정 함수
 export function adjustLampLightingBasedOnBackground(imageData, lights) {
   const { ambientLight, lampLight, mainLight } = lights;

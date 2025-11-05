@@ -74,6 +74,36 @@ export function changeBackground(imageUrl, state, threeScene) {
   // 새 배경 URL 저장
   state.pendingBackgroundImage = imageUrl;
 
+  // wishMessage 또는 genieResponseMessage를 날려보내기 (1초 딜레이 후)
+  setTimeout(() => {
+    if (state.wishMessage && state.wishMessage.length > 0) {
+      console.log('🌪️ Dispersing wishMessage with background transition (1s delayed)');
+      state.wishMessage.forEach((msgLetter) => {
+        msgLetter.dispersing = true; // 플래그 추가
+        msgLetter.particles.forEach(p => {
+          p.dispersing = true;
+          // 배경 전환 파티클과 비슷한 속도로 오른쪽으로 날아감
+          p.velocityX = 8 + Math.random() * 4; // 오른쪽으로 빠르게 (8~12)
+          p.velocityY = (Math.random() - 0.5) * 2; // 약간의 수직 움직임
+        });
+      });
+    }
+
+    // 이전 지니 반응이 있으면 날려보내기
+    if (state.genieResponseMessage && state.genieResponseMessage.length > 0) {
+      console.log('🌪️ Dispersing previous genieResponse with background transition (1s delayed)');
+      state.genieResponseMessage.forEach((msgLetter) => {
+        msgLetter.dispersing = true; // 플래그 추가
+        msgLetter.particles.forEach(p => {
+          p.dispersing = true;
+          // 배경 전환 파티클과 비슷한 속도로 오른쪽으로 날아감
+          p.velocityX = 8 + Math.random() * 4;
+          p.velocityY = (Math.random() - 0.5) * 2;
+        });
+      });
+    }
+  }, 1000); // 1초 딜레이
+
   // 파티클 생성 시작
   state.isTransitioningBackground = true;
   state.transitionStartTime = Date.now();
@@ -104,10 +134,21 @@ export function changeBackground(imageUrl, state, threeScene) {
   const bgImage = new Image();
   bgImage.crossOrigin = 'anonymous';
   bgImage.onload = function () {
+    // 이전 이미지 데이터 정리 (메모리 누수 방지)
+    if (state.bgImageData) {
+      console.log('🗑️ Clearing previous background image data');
+      state.bgImageData = null;
+    }
+    
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
     bgCtx.drawImage(bgImage, 0, 0, bgCanvas.width, bgCanvas.height);
     state.bgImageData = bgCtx.getImageData(0, 0, bgCanvas.width, bgCanvas.height);
-    console.log('📸 Background image data loaded for particle color adjustment');
+    console.log('📸 Background image data loaded:', {
+      width: bgCanvas.width,
+      height: bgCanvas.height,
+      dataSize: state.bgImageData.data.length,
+      memorySizeMB: (state.bgImageData.data.length / (1024 * 1024)).toFixed(2)
+    });
 
     // 배경 이미지 평균 밝기 계산 및 램프 조명 조정
     adjustLampLightingBasedOnBackground(state.bgImageData, lights);
