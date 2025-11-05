@@ -6,6 +6,10 @@ export const state = {
   lampShakeStartTime: 0,
   touchInteractionsEnabled: true,
 
+  // Wish granting animation (독립적)
+  wishGrantingAnimation: false,
+  wishGrantingStartTime: 0,
+
   // Text input
   currentTypedText: '',
   wishInputText: '',

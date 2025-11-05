@@ -120,13 +120,46 @@ export function setupThreeScene(state) {
     // 기본 조명(8)을 minimum으로 하고, 더 밝게만 변화
     lampLight.intensity = 8 + Math.sin(Date.now() * 0.0008) * 1.5; // 8~9.5 사이로 변화
 
+    // 소원 승인 애니메이션 (독립적)
+    if (state.wishGrantingAnimation) {
+      const elapsed = (Date.now() - state.wishGrantingStartTime) / 1000;
+      const duration = 1.5; // 1.5초
+
+      if (elapsed < duration) {
+        const t = elapsed / duration; // 0~1
+        const easeInOut = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        const shake = (1 - easeInOut); // 점점 약해짐
+
+        // 처음 0.2초 ease-in
+        const easeInFactor = elapsed < 0.2 ? (elapsed / 0.2) * (elapsed / 0.2) : 1;
+        const finalShake = shake * easeInFactor;
+
+        lampGroup.rotation.x = Math.sin(Date.now() * 0.008) * finalShake * 0.18; // 중간 강도
+        lampGroup.rotation.y = Math.sin(Date.now() * 0.011) * finalShake * 0.24;
+        lampGroup.rotation.z = Math.sin(Date.now() * 0.009) * finalShake * 0.15;
+      } else {
+        // 원위치로 부드럽게 복귀
+        lampGroup.rotation.x *= 0.85;
+        lampGroup.rotation.y *= 0.85;
+        lampGroup.rotation.z *= 0.85;
+
+        if (Math.abs(lampGroup.rotation.x) < 0.01 &&
+          Math.abs(lampGroup.rotation.y) < 0.01 &&
+          Math.abs(lampGroup.rotation.z) < 0.01) {
+          lampGroup.rotation.set(0, 0, 0);
+          state.wishGrantingAnimation = false;
+          console.log('✨ Wish granting animation completed');
+        }
+      }
+    }
+
     // 램프 흔들림 애니메이션 (touch 횟수에 따라 점진적으로 강해짐)
     if (state.lampShaking) {
       const elapsed = (Date.now() - state.lampShakeStartTime) / 1000; // 초 단위
 
-      // touch 횟수에 따른 강도와 지속 시간 (1->2->3)
-      const intensityMultiplier = state.touchCount * 0.4; // 0.4, 0.8, 1.2 (첫번째 더 약하게)
-      const duration = state.touchCount === 1 ? 1.5 : (state.touchCount === 2 ? 2.5 : 4); // 1.5초, 2.5초, 4초
+      // touch 횟수에 따른 강도와 지속 시간
+      const intensityMultiplier = state.touchCount * 0.4; // 0.4, 0.8, 1.2
+      const duration = state.touchCount === 1 ? 1.5 : (state.touchCount === 2 ? 2.5 : 4);
 
       if (elapsed < duration) {
         const t = elapsed / duration; // 0~1

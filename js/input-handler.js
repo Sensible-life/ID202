@@ -230,8 +230,17 @@ export function setupInputHandlers(state, threeScene, canvas) {
           state.wishCount++;
           console.log(`🌟 Wish count: ${state.wishCount}`);
 
-          // 배경 전환 시작
-          changeBackground(imageUrl, state, threeScene);
+          // 소원 승인 애니메이션 시작 (독립적)
+          state.wishGrantingAnimation = true;
+          state.wishGrantingStartTime = Date.now();
+          console.log('🪔 Wish granting animation started!');
+
+          // 애니메이션 완료 후 배경 전환 시작 (1.8초)
+          setTimeout(() => {
+            console.log('🌊 Starting background transition after wish granting');
+            changeBackground(imageUrl, state, threeScene);
+          }, 1800);
+          
           state.wishInputText = ''; // 리셋
         } else {
           console.log('⚠️ No matching keyword found in wish. Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
