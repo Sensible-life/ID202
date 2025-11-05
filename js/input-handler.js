@@ -4,6 +4,7 @@ import { isKorean } from './utils.js';
 import { createKoreanWarningMessage, createTouchHint, createEnterHint } from './hint-system.js';
 import { changeBackground, getBackgroundColorAt } from './background.js';
 import { audioSystem } from './audio.js';
+import { handleFallbackSearch } from './fallback-search.js';
 
 // keywordMap, backgroundImages, genieResponses는 keywords.js에서 전역 변수로 로드됨
 /* global keywordMap, backgroundImages, genieResponses */
@@ -251,7 +252,45 @@ export function setupInputHandlers(state, threeScene, canvas) {
           
           state.wishInputText = ''; // 리셋
         } else {
-          console.log('⚠️ No matching keyword found in wish. Try: 부자/rich/wealth, 사랑/love, 건강/health, 성공/success, 행복/happiness, ocean, forest, tokyo, space, etc.');
+          // 키워드 매칭 실패 - Fallback 검색
+          console.log('⚠️ No matching keyword found. Using fallback search...');
+          
+          const fallbackResult = handleFallbackSearch(text);
+          
+          // 지니 응답 메시지 설정
+          state.pendingGenieResponse = fallbackResult.message;
+          
+          // 소원 승인 애니메이션 시작
+          state.wishGrantingAnimation = true;
+          state.wishGrantingStartTime = Date.now();
+          console.log('🪔 Wish granting animation started (fallback)');
+          
+          // 램프 흔들림 사운드
+          audioSystem.playLampShakeWithAnimation(1);
+          
+          // 애니메이션 완료 후 Wikipedia로 이동
+          setTimeout(() => {
+            console.log('🌐 Opening Wikipedia popup:', fallbackResult.url);
+            
+            // TTS로 지니 응답 읽기
+            audioSystem.speakAsGenie(fallbackResult.message);
+            
+            // 3초 후 Wikipedia 팝업창 열기
+            setTimeout(() => {
+              // 팝업 창 크기 및 위치 설정
+              const width = 900;
+              const height = 700;
+              const left = (screen.width - width) / 2;
+              const top = (screen.height - height) / 2;
+              
+              const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
+              
+              window.open(fallbackResult.url, 'WikipediaPopup', features);
+              console.log('✅ Wikipedia popup opened');
+            }, 3000);
+          }, 1800);
+          
+          state.wishInputText = ''; // 리셋
         }
       }
 
