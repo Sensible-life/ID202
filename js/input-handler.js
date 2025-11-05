@@ -3,6 +3,7 @@ import { Letter } from './letter.js';
 import { isKorean } from './utils.js';
 import { createKoreanWarningMessage, createTouchHint, createEnterHint } from './hint-system.js';
 import { changeBackground, getBackgroundColorAt } from './background.js';
+import { audioSystem } from './audio.js';
 
 // keywordMap, backgroundImages, genieResponses는 keywords.js에서 전역 변수로 로드됨
 /* global keywordMap, backgroundImages, genieResponses */
@@ -152,6 +153,9 @@ export function setupInputHandlers(state, threeScene, canvas) {
             state.lampShakeStartTime = Date.now();
             console.log('🪔 Lamp shaking started!');
 
+            // 램프 흔들림 사운드 재생 (애니메이션과 동기화)
+            audioSystem.playLampShakeWithAnimation(state.touchCount);
+
             // 세 번째 touch일 때 카메라 회전 시작 (흔들림과 동시에)
             if (state.touchCount === 3) {
               console.log('📸 Starting camera return to initial position');
@@ -235,9 +239,13 @@ export function setupInputHandlers(state, threeScene, canvas) {
           state.wishGrantingStartTime = Date.now();
           console.log('🪔 Wish granting animation started!');
 
+          // 램프 흔들림 사운드 재생 (lamp_jingle.wav)
+          audioSystem.playLampShakeWithAnimation(1); // 소원 승인용
+
           // 애니메이션 완료 후 배경 전환 시작 (1.8초)
           setTimeout(() => {
             console.log('🌊 Starting background transition after wish granting');
+            audioSystem.playTransitionSweep(); // 배경 전환 사운드 (Harp.wav)
             changeBackground(imageUrl, state, threeScene);
           }, 1800);
           

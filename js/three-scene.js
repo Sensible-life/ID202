@@ -1,4 +1,6 @@
 // Three.js 3D scene setup
+import { audioSystem } from './audio.js';
+
 export function setupThreeScene(state) {
   // Three.js 3D 씬 설정
   const scene = new THREE.Scene();
@@ -192,6 +194,11 @@ export function setupThreeScene(state) {
           // 세 번째 touch일 때만 모래바람 시작
           if (state.touchCount === 3) {
             console.log('🌪️ Starting sand storm!');
+            
+            // "Ahaaaa!" TTS 재생 (길게)
+            console.log('🎙️ Playing Ahaaaa!');
+            audioSystem.speakAsGenie("Ahaaaa!");
+            
             state.isExploding = true;
             state.explosionStartTime = Date.now();
             console.log('💥 Explosion started at:', new Date().toLocaleTimeString());

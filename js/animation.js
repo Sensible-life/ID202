@@ -2,6 +2,7 @@
 import { SandCurtainParticle, BackgroundTransitionParticle } from './particles.js';
 import { Letter } from './letter.js';
 import { getBackgroundColorAt } from './background.js';
+import { audioSystem } from './audio.js';
 
 // Intro message 생성
 function createIntroMessage(state, getBackgroundColorAtFunc, createEnterHintFunc) {
@@ -80,6 +81,12 @@ function createIntroMessage(state, getBackgroundColorAtFunc, createEnterHintFunc
   });
 
   console.log('✨ introMessage created (will reveal with curtain sweep)!');
+  
+  // Intro 메시지 TTS로 읽기 (1초 딜레이 후)
+  setTimeout(() => {
+    const fullIntroText = introParts.join(", ");
+    audioSystem.speakAsGenie(fullIntroText);
+  }, 1000); // 1초 대기
 }
 
 // Genie response message 생성 (소원에 대한 반응)
@@ -242,6 +249,10 @@ function createGenieResponseMessage(responseText, state, getBackgroundColorAtFun
   state.genieResponseStartTime = Date.now();
 
   console.log('✨ genieResponseMessage created!');
+  
+  // 지니 음성으로 응답 읽기 (TTS)
+  console.log('🎙️ Calling speakAsGenie with:', responseText);
+  audioSystem.speakAsGenie(responseText);
 }
 
 // Wish message 생성
@@ -302,6 +313,9 @@ function createWishMessage(state, getBackgroundColorAtFunc, createEnterHintFunc)
   });
 
   console.log('✨ wishMessage created!');
+  
+  // "Make your wish" 메시지 TTS로 읽기
+  audioSystem.speakAsGenie("Make your wish");
 }
 
 // Export createGenieResponseMessage for external use
@@ -764,6 +778,15 @@ export function startAnimation(canvas, ctx, state, getBackgroundColorAtFunc, cre
         }
 
         // 지니 반응 메시지를 배경 전환보다 1초 먼저 생성 (파티클 중간에)
+        if (transitionElapsed > 2.0) {
+          console.log('🔍 Checking genie response:', {
+            hasPending: !!state.pendingGenieResponse,
+            pending: state.pendingGenieResponse,
+            creating: state.genieResponseCreating,
+            elapsed: transitionElapsed.toFixed(2)
+          });
+        }
+        
         if (state.pendingGenieResponse && !state.genieResponseCreating && transitionElapsed > 2.0) {
           console.log('🧞 Creating genie response DURING transition (1s early):', state.pendingGenieResponse);
           state.genieResponseCreating = true; // 중복 생성 방지

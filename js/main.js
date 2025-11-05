@@ -1,9 +1,10 @@
-// Main entry point
+// Main application entry point
 import { state, initializeState } from './state.js';
 import { setupThreeScene } from './three-scene.js';
-import { initBackgroundCanvas, resizeBackgroundCanvas, getBackgroundColorAt } from './background.js';
-import { setupInputHandlers } from './input-handler.js';
+import { initBackgroundCanvas, getBackgroundColorAt, resizeBackgroundCanvas } from './background.js';
 import { startAnimation } from './animation.js';
+import { setupInputHandlers } from './input-handler.js';
+import { audioSystem } from './audio.js';
 import { createEnterHint } from './hint-system.js';
 
 // 페이지 로드 시 IME(한글 입력) 비활성화 유도
@@ -23,6 +24,22 @@ document.addEventListener('keydown', function (e) {
 
 // 초기화
 initializeState();
+
+// 오디오 시스템 초기화 (첫 사용자 인터랙션 시)
+let audioInitialized = false;
+document.addEventListener('click', () => {
+  if (!audioInitialized) {
+    audioSystem.init();
+    audioInitialized = true;
+  }
+}, { once: true });
+
+document.addEventListener('keydown', () => {
+  if (!audioInitialized) {
+    audioSystem.init();
+    audioInitialized = true;
+  }
+}, { once: true });
 
 // 2D 캔버스 설정
 const canvas = document.getElementById('canvas');

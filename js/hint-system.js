@@ -1,5 +1,6 @@
 // Hint system for various messages
 import { Letter } from './letter.js';
+import { audioSystem } from './audio.js';
 
 // touch 힌트 메시지 생성 함수 (단순 버전)
 export function createTouchHint(state, getBackgroundColorAt, createEnterHint) {
@@ -7,6 +8,12 @@ export function createTouchHint(state, getBackgroundColorAt, createEnterHint) {
 
   state.touchHintShown = true; // 표시 플래그 설정
   console.log('💡 Creating simple touch hint message!');
+  
+  // "Hmmmmmmmm..." TTS 재생 (고민하는 느낌)
+  if (audioSystem && audioSystem.speakAsGenie) {
+    audioSystem.speakAsGenie("Hmmmmmmmm...");
+  }
+  
   state.touchHintMessage = [];
   state.touchHintStartTime = Date.now();
   const message = "touch?";
@@ -75,6 +82,12 @@ export function createEnterHint(state, getBackgroundColorAt) {
 
   state.enterHintShown = true; // 표시 플래그 설정
   console.log('💡 Creating Enter key hint message!');
+  
+  // "Hmmmmmmmm..." TTS 재생 (고민하는 느낌)
+  if (audioSystem && audioSystem.speakAsGenie) {
+    audioSystem.speakAsGenie("Hmmmmmmmm...");
+  }
+  
   state.enterHintMessage = [];
   state.enterHintStartTime = Date.now();
   const message = 'type and press "enter" to talk with me';
@@ -139,10 +152,25 @@ export function disperseEnterHint(state) {
 
 // 클릭 힌트 생성 함수
 export function createClickHint(state, getBackgroundColorAt, createEnterHint) {
+  console.log('🚨 createClickHint CALLED!'); // 최상단 로그
+  
   if (state.clickHintMessage || state.clickHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
 
   state.clickHintShown = true; // 표시 플래그 설정
   console.log('💡 Creating click hint message!');
+  
+  // "Hmmm..." TTS 재생 (고민하는 느낌)
+  console.log('🔍 Checking audioSystem...');
+  console.log('🔍 audioSystem:', audioSystem);
+  console.log('🔍 audioSystem.speakAsGenie:', audioSystem?.speakAsGenie);
+  
+  if (audioSystem && audioSystem.speakAsGenie) {
+    console.log('✅ Calling speakAsGenie!');
+    audioSystem.speakAsGenie("Hmmmmmmmm...");
+  } else {
+    console.error('❌ audioSystem not available');
+  }
+  
   state.clickHintMessage = [];
   state.clickHintStartTime = Date.now();
   const message = "I only recognize keyboard input and mouse position";
@@ -212,6 +240,12 @@ export function createKoreanWarningMessage(state, getBackgroundColorAt, createEn
   if (state.koreanWarningMessage || state.koreanHintShown) return; // 이미 생성되었거나 한 번 표시된 경우 무시
 
   state.koreanHintShown = true; // 표시 플래그 설정
+  
+  // "Hmmmmmmmm..." TTS 재생 (고민하는 느낌)
+  if (audioSystem && audioSystem.speakAsGenie) {
+    audioSystem.speakAsGenie("Hmmmmmmmm...");
+  }
+  
   state.koreanWarningMessage = [];
   state.koreanWarningStartTime = Date.now();
   const message = "I can't speak Korean...";
